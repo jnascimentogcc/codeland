@@ -157,7 +157,9 @@ Every visual element must link back to the real artifact: clicking a building op
 * **Analyzed language:** TypeScript (`.ts`, `.tsx`, `.mts`, `.cts`; declaration files excluded).
 * **Analyzer stack:** Python CLI (`analyzer/`), using tree-sitter for parsing (LOC, cyclomatic complexity and imports in one pass), the git CLI for churn (following renames) and LCOV for coverage.
 * **City model:** `schema/city-model.schema.json` (v0.2.0) holds raw metrics and the layout; clients decide the visual mapping.
-* **Renderer:** not decided yet. A browser renderer has to be JavaScript/TypeScript (e.g. Three.js / React Three Fiber) regardless of the analyzer being Python.
+* **Renderer and other clients:** TypeScript, running in the browser, with **React Three Fiber** (Three.js) plus drei and postprocessing (`renderer/`). Clients consume the city model JSON only and never import analyzer code; the TypeScript model types are generated from the JSON Schema (`npm run gen:types`).
+* **Visual direction:** futuristic / neon rather than plain boxes. All buildings share one shape (tapered hexagonal prism) so height and footprint stay comparable; the style comes from one instanced shader (glowing edges, one light band per "floor", fresnel glass body, pulse proportional to the hotspot score, holographic scan on the selected tower) plus bloom. Imports are arcs of light between rooftops.
+* **Stack summary:** Python for analysis (`analyzer/`), TypeScript for clients, JSON Schema as the contract between them.
 
 Current limitations of the analyzer: tsconfig `paths`/`baseUrl` aliases count as external imports; the layout is deterministic but not yet incremental (positions are not reused from a previous model).
 

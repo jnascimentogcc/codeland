@@ -1,0 +1,326 @@
+:root {
+  --bg: #03060c;
+  --panel: rgba(6, 14, 26, 0.72);
+  --border: rgba(95, 227, 255, 0.22);
+  --text: #d8f6ff;
+  --muted: #6f93a6;
+  --accent: #5fe3ff;
+  --hot: #ff3b5c;
+  --warm: #ff8c1a;
+  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.splash {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: 24px;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.hud > *,
+.side > * {
+  pointer-events: auto;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  backdrop-filter: blur(10px);
+  box-shadow:
+    0 0 24px rgba(95, 227, 255, 0.06),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+  padding: 14px 16px;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+h2 {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.brand {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  max-width: calc(100% - 32px);
+}
+
+.logo {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.45em;
+  color: var(--accent);
+  text-shadow: 0 0 12px rgba(95, 227, 255, 0.7);
+}
+
+.repo {
+  margin: 6px 0 2px;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.segmented button {
+  padding: 5px 14px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.segmented button.active {
+  color: var(--bg);
+  background: var(--accent);
+  box-shadow: 0 0 14px rgba(95, 227, 255, 0.6);
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.toggle input {
+  accent-color: var(--accent);
+}
+
+.side {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 340px;
+  max-width: calc(100% - 32px);
+  max-height: calc(100% - 32px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  pointer-events: none;
+}
+
+.ranking {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.ranking button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 6px;
+  text-align: left;
+  font-size: 12px;
+  overflow: hidden;
+}
+
+.ranking button:hover,
+.ranking button.active {
+  background: rgba(95, 227, 255, 0.08);
+}
+
+.ranking .bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--warm), var(--hot));
+  box-shadow: 0 0 8px rgba(255, 140, 26, 0.6);
+}
+
+.ranking .score {
+  font-variant-numeric: tabular-nums;
+  color: var(--warm);
+  min-width: 32px;
+}
+
+.ranking .path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
+.details {
+  position: relative;
+}
+
+.details-path {
+  font-size: 13px;
+  word-break: break-all;
+  margin-bottom: 10px;
+}
+
+.details dl {
+  margin: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.details dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+}
+
+.details dt {
+  color: var(--muted);
+}
+
+.details dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  font-size: 18px;
+  color: var(--muted);
+}
+
+.legend {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  width: 360px;
+  max-width: calc(100% - 32px);
+}
+
+.gradient {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #1ad9ff, var(--warm) 40%, var(--hot));
+  box-shadow: 0 0 12px rgba(255, 140, 26, 0.45);
+}
+
+.legend-scale {
+  display: flex;
+  justify-content: space-between;
+  margin: 4px 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.modules {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 12px;
+}
+
+.modules i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 6px;
+  border-radius: 2px;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.hint {
+  margin-top: 6px;
+  opacity: 0.7;
+}
+
+.error {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  border-color: rgba(255, 59, 92, 0.5);
+  color: #ffc2cc;
+  font-size: 13px;
+}
+
+.tooltip {
+  padding: 6px 10px;
+  background: rgba(3, 8, 16, 0.85);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  white-space: nowrap;
+  font-size: 12px;
+  transform: translateY(-50%);
+}
+
+.tooltip-meta {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+@media (max-width: 760px) {
+  .side {
+    top: auto;
+    bottom: 16px;
+    max-height: 45%;
+  }
+  .legend {
+    display: none;
+  }
+}
