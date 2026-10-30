@@ -73,6 +73,8 @@ Height and footprint stay constant across layers so the city shape remains recog
 
 **Debt metrics:** the hotspot score follows the "code as a crime scene" approach (Tornhill): complexity alone is not enough, since complex code that never changes is low priority. Churn is measured over a configurable window (e.g. last 6 months).
 
+The complexity side of the score uses **decision points** (cyclomatic complexity minus the base 1 of each function), not summed complexity. Summed complexity rewards files with many trivial functions: on the first real repository analyzed, test files full of `it(...)` callbacks topped the ranking above the actual business logic. Test files are also marked with `role: "test"` in the model, so the debt layer can show or filter them separately.
+
 ### 2.3 Layout stability — **Decided as a requirement**
 The commit time machine only works if buildings keep their positions as the code evolves. Squarified treemaps reshuffle the whole city when one file changes.
 
@@ -149,6 +151,15 @@ Every visual element must link back to the real artifact: clicking a building op
 | **3. Agents ↔ debt** | MCP server over the city model (agents query hotspots and structure); per-session debt delta (did this agent session raise or lower the hotspot score?). | The combined differentiator (2.1). |
 | **4. Time machine** | Snapshots/deltas over git history with stable layout and rename tracking; playback of debt evolution; agent session replay; tags as landmarks. | Layout stability and history performance. |
 | **5. CI, multiverse and collaboration** | Non-agent CI/CD effects, branch diff overlays, conflict prediction, human IDE presence, war rooms, spatial audio, multiplayer. | Highest cost and least proven value for the chosen use cases; only after 1–4 succeed. |
+
+### 4.1 Phase 1 technical decisions — **Decided**
+
+* **Analyzed language:** TypeScript (`.ts`, `.tsx`, `.mts`, `.cts`; declaration files excluded).
+* **Analyzer stack:** Python CLI (`analyzer/`), using tree-sitter for parsing (LOC, cyclomatic complexity and imports in one pass), the git CLI for churn (following renames) and LCOV for coverage.
+* **City model:** `schema/city-model.schema.json` (v0.2.0) holds raw metrics and the layout; clients decide the visual mapping.
+* **Renderer:** not decided yet. A browser renderer has to be JavaScript/TypeScript (e.g. Three.js / React Three Fiber) regardless of the analyzer being Python.
+
+Current limitations of the analyzer: tsconfig `paths`/`baseUrl` aliases count as external imports; the layout is deterministic but not yet incremental (positions are not reused from a previous model).
 
 Stable layout (2.3) is a requirement from phase 1 even though playback only arrives in phase 4: positions must not change between analysis runs, otherwise the live agents view also jumps around.
 

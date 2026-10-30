@@ -2,9 +2,34 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Current state
+## Layout and commands
 
-The repository is at the pre-implementation stage: it contains only `LICENSE` and design documents in `docs/`. There is no source code, build system, package manifest, linter, or test suite yet, so there are no build/lint/test commands to document. Update this file once a stack is chosen and code lands.
+- `tree-sitter` is pinned `<0.26`: 0.26.0 crashes natively (access violation) on Windows when walking larger trees; `test_large_source_does_not_crash` guards it.
+- `schema/city-model.schema.json` – the city model contract (JSON Schema) between analyzers and clients. Changing the model means bumping `schemaVersion` here and `SCHEMA_VERSION` in `analyzer/src/codeland_analyzer/__init__.py`.
+- `analyzer/` – Python CLI (uv project) that builds the city model from a TypeScript git repository. No renderer exists yet.
+
+Run from `analyzer/`:
+
+```bash
+uv sync                                        # install deps (incl. dev group)
+uv run pytest                                  # all tests
+uv run pytest tests/test_parse.py::test_metrics_of_typescript_source   # single test
+uv run ruff check . && uv run ruff format .    # lint + format
+uv run codeland-analyze <repo> -o city.json [--churn-days 180] [--coverage lcov.info] [--include-tests]
+```
+
+## Analyzer architecture
+
+`build.analyze()` orchestrates independent modules and assembles the model dict:
+
+- `gitrepo` – git CLI wrapper; source files come from `git ls-files --cached --others --exclude-standard` (so ignored dirs like `node_modules` are skipped; `.d.ts` excluded).
+- `parse` – one tree-sitter pass per file yields LOC (lines with non-comment tokens), cyclomatic complexity (per function, nested functions counted separately, plus top-level decisions) and import references (import / re-export / dynamic import / require).
+- `resolve` – resolves only relative specifiers to repo files (incl. `./x.js` → `x.ts`, `index.ts`); bare specifiers are external.
+- `churn` – `git log -M --numstat` newest-first, folding history of renamed files into the current path.
+- `coverage` – LCOV parser, paths normalized to repo-relative.
+- `layout` – deterministic nested shelf-packing (folders → districts, files → buildings; footprint from import count), choosing per district the row width that gives the most square shape. Layout positions live in the model because stability across runs is a design requirement.
+
+The hotspot score is normalized **decisions** (complexity minus one per function) × normalized churn commits; summed complexity is deliberately not used because it ranks test files with many trivial callbacks above real logic. Files are tagged `role: source|test` (`gitrepo.is_test`), and the CLI hotspot list skips tests unless `--include-tests`. Tests build real temporary git repos via the `repo` fixture in `tests/conftest.py`, and `test_build.py` validates output against the schema.
 
 ## Project concept
 
@@ -25,3 +50,4 @@ Architecturally this implies three data layers feeding a 3D renderer: static cod
 
 - Default/main branch is `develop`.
 - The concept document is written in English; keep new docs in English unless told otherwise.
+- The analyzed language is TypeScript; the analyzer is Python (decided in `docs/architecture_and_mvp.md` §4.1).

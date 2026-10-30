@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://codeland.dev/schema/city-model/0.2.0",
+  "title": "Codeland city model",
+  "description": "Contract between analyzers and clients. Raw metrics plus a persisted layout; clients decide visual mappings (see docs/architecture_and_mvp.md, section 2.2).",
+  "type": "object",
+  "required": ["schemaVersion", "generatedAt", "repository", "analysis", "districts", "buildings", "edges"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": "0.2.0" },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "repository": {
+      "type": "object",
+      "required": ["name", "commit", "branch"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "commit": { "type": ["string", "null"], "description": "HEAD commit SHA at analysis time." },
+        "branch": { "type": ["string", "null"] }
+      }
+    },
+    "analysis": {
+      "type": "object",
+      "required": ["language", "churnWindowDays", "coverageSource"],
+      "additionalProperties": false,
+      "properties": {
+        "language": { "const": "typescript" },
+        "churnWindowDays": { "type": "integer", "minimum": 1 },
+        "coverageSource": { "type": ["string", "null"], "description": "Coverage report used, or null when coverage was not provided." }
+      }
+    },
+    "districts": {
+      "description": "Folders (city blocks). The repository root is the district with path \"\".",
+      "type": "array",
+      "items": { "$ref": "#/$defs/district" }
+    },
+    "buildings": {
+      "description": "Source files.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/building" }
+    },
+    "edges": {
+      "description": "Imports between buildings of this repository. External packages are only counted in metrics.externalImports.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/edge" }
+    }
+  },
+  "$defs": {
+    "rect": {
+      "description": "Ground rectangle in world units; x/z is the corner with the smallest coordinates.",
+      "type": "object",
+      "required": ["x", "z", "width", "depth"],
+      "additionalProperties": false,
+      "properties": {
+        "x": { "type": "number" },
+        "z": { "type": "number" },
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "depth": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "district": {
+      "type": "object",
+      "required": ["id", "path", "parent", "depth", "layout"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "path": { "type": "string", "description": "Repository-relative folder path with forward slashes." },
+        "parent": { "type": ["string", "null"] },
+        "depth": { "type": "integer", "minimum": 0 },
+        "layout": { "$ref": "#/$defs/rect" }
+      }
+    },
+    "building": {
+      "type": "object",
+      "required": ["id", "path", "district", "role", "metrics", "layout"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "path": { "type": "string", "description": "Repository-relative file path with forward slashes." },
+        "district": { "type": "string" },
+        "role": { "enum": ["source", "test"], "description": "\"test\" for *.test.* / *.spec.* files and files under test, tests or __tests__ folders." },
+        "metrics": {
+          "type": "object",
+          "required": ["loc", "complexity", "decisions", "maxFunctionComplexity", "functions", "imports", "externalImports", "churnCommits", "churnLines", "coverage", "hotspot"],
+          "additionalProperties": false,
+          "properties": {
+            "loc": { "type": "integer", "minimum": 0, "description": "Lines containing code (blank and comment-only lines excluded)." },
+            "complexity": { "type": "integer", "minimum": 0, "description": "Sum of cyclomatic complexity of all functions plus top-level code." },
+            "decisions": { "type": "integer", "minimum": 0, "description": "Branching points only: complexity minus the base 1 of each function, so many trivial functions (e.g. test callbacks) do not add up." },
+            "maxFunctionComplexity": { "type": "integer", "minimum": 0 },
+            "functions": { "type": "integer", "minimum": 0 },
+            "imports": { "type": "integer", "minimum": 0, "description": "Efferent coupling: distinct modules imported (internal + external)." },
+            "externalImports": { "type": "integer", "minimum": 0 },
+            "churnCommits": { "type": "integer", "minimum": 0, "description": "Commits touching the file within the churn window, following renames." },
+            "churnLines": { "type": "integer", "minimum": 0, "description": "Lines added + deleted within the churn window." },
+            "coverage": { "type": ["number", "null"], "minimum": 0, "maximum": 1, "description": "Line coverage ratio, or null when unknown." },
+            "hotspot": { "type": "number", "minimum": 0, "maximum": 1, "description": "Normalized decisions x normalized churnCommits." }
+          }
+        },
+        "layout": { "$ref": "#/$defs/rect" }
+      }
+    },
+    "edge": {
+      "type": "object",
+      "required": ["from", "to", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "from": { "type": "string" },
+        "to": { "type": "string" },
+        "kind": { "enum": ["import", "reexport", "dynamic-import", "require"] }
+      }
+    }
+  }
+}
