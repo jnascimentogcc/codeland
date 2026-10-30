@@ -25,9 +25,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--include-tests", action="store_true", help="also rank test files in the hotspot list"
     )
+    parser.add_argument(
+        "--previous",
+        type=Path,
+        help="earlier city model of the same repository; its layout is kept stable "
+        "(may be the same file as --output)",
+    )
     args = parser.parse_args(argv)
 
-    model = analyze(args.repo, churn_days=args.churn_days, coverage=args.coverage)
+    previous = json.loads(args.previous.read_text(encoding="utf-8")) if args.previous else None
+    model = analyze(
+        args.repo, churn_days=args.churn_days, coverage=args.coverage, previous=previous
+    )
     text = json.dumps(model, indent=2, ensure_ascii=False)
     if args.output:
         args.output.write_text(text + "\n", encoding="utf-8")

@@ -69,6 +69,23 @@ def test_model_matches_schema_and_metrics(repo):
     assert {d["id"] for d in model["districts"]} == {".", "src"}
 
 
+def test_cli_keeps_layout_stable_with_previous_model(repo, tmp_path):
+    make_sample(repo)
+    output = tmp_path / "city.json"
+    assert main([str(repo.root), "-o", str(output), "--top", "0"]) == 0
+    before = {b["path"]: b["layout"] for b in json.loads(output.read_text())["buildings"]}
+
+    repo.write("src/aaa.ts", "export const first = 1;\n")  # would sort first in a fresh layout
+    args = [str(repo.root), "-o", str(output), "--previous", str(output), "--top", "0"]
+    assert main(args) == 0
+
+    model = json.loads(output.read_text(encoding="utf-8"))
+    jsonschema.validate(model, SCHEMA)
+    after = {b["path"]: b["layout"] for b in model["buildings"]}
+    assert set(after) == set(before) | {"src/aaa.ts"}
+    assert {path: after[path] for path in before} == before
+
+
 def test_cli_writes_model_and_lists_hotspots(repo, tmp_path, capsys):
     make_sample(repo)
     output = tmp_path / "city.json"

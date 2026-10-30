@@ -161,7 +161,9 @@ Every visual element must link back to the real artifact: clicking a building op
 * **Visual direction:** futuristic / neon rather than plain boxes. All buildings share one shape (tapered hexagonal prism) so height and footprint stay comparable; the style comes from one instanced shader (glowing edges, one light band per "floor", fresnel glass body, pulse proportional to the hotspot score, holographic scan on the selected tower) plus bloom. Imports are arcs of light between rooftops.
 * **Stack summary:** Python for analysis (`analyzer/`), TypeScript for clients, JSON Schema as the contract between them.
 
-Current limitations of the analyzer: tsconfig `paths`/`baseUrl` aliases count as external imports; the layout is deterministic but not yet incremental (positions are not reused from a previous model).
+**Stable layout (implemented, see 2.3):** `codeland-analyze --previous <city.json>` keeps every child at its previous position inside its district. Removed files leave a vacant lot, new files are appended after the existing ones, and only growth pushes neighbours (a wider child pushes the later children of its row, a deeper row pushes the rows below). On bella-nina, adding one file and removing another moved 4 of 26 buildings by 2 units, against 20 of 26 by up to 10 units with a fresh layout. Vacant lots accumulate over time; a run without `--previous` re-plans the city compactly (a deliberate "re-zoning", not something to do on every run).
+
+Current limitations of the analyzer: tsconfig `paths`/`baseUrl` aliases count as external imports; growth has no slack, so a building gaining one import still shifts its later neighbours by a small amount.
 
 Stable layout (2.3) is a requirement from phase 1 even though playback only arrives in phase 4: positions must not change between analysis runs, otherwise the live agents view also jumps around.
 

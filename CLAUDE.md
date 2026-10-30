@@ -18,6 +18,7 @@ uv run pytest tests/test_parse.py::test_metrics_of_typescript_source   # single 
 uv run ruff check . && uv run ruff format .    # lint + format
 uv run codeland-analyze <repo> -o city.json [--churn-days 180] [--coverage lcov.info] [--include-tests]
 uv run codeland-analyze <repo> -o ../renderer/public/city.json   # model the renderer loads by default
+uv run codeland-analyze <repo> -o city.json --previous city.json  # re-analyze keeping the layout stable
 ```
 
 Run from `renderer/`:
@@ -42,7 +43,7 @@ npm run gen:types    # regenerate src/model/city-model.ts from the schema (do no
 - `resolve` – resolves only relative specifiers to repo files (incl. `./x.js` → `x.ts`, `index.ts`); bare specifiers are external.
 - `churn` – `git log -M --numstat` newest-first, folding history of renamed files into the current path.
 - `coverage` – LCOV parser, paths normalized to repo-relative.
-- `layout` – deterministic nested shelf-packing (folders → districts, files → buildings; footprint from import count), choosing per district the row width that gives the most square shape. Layout positions live in the model because stability across runs is a design requirement.
+- `layout` – nested shelf-packing (folders → districts, files → buildings; footprint from import count). Two modes per district: *fresh* (children sorted by name, row width chosen for the most square shape) and *stable* (`--previous`: `slots_from_model` reads each child's position relative to its district back from the earlier model; `_place_stable` keeps those positions, leaves vacant lots for removed children, appends new ones, and lets growth push only later neighbours). Vacancies are preserved across runs because positions, not order, are read back. Don't "fix" the gaps by compacting in stable mode: stability across runs is a design requirement (time machine, live agents).
 
 The hotspot score is normalized **decisions** (complexity minus one per function) × normalized churn commits; summed complexity is deliberately not used because it ranks test files with many trivial callbacks above real logic. Files are tagged `role: source|test` (`gitrepo.is_test`), and the CLI hotspot list skips tests unless `--include-tests`. Tests build real temporary git repos via the `repo` fixture in `tests/conftest.py`, and `test_build.py` validates output against the schema.
 

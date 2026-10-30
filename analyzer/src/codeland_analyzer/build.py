@@ -9,7 +9,7 @@ from codeland_analyzer import SCHEMA_VERSION
 from codeland_analyzer.churn import Churn, collect_churn
 from codeland_analyzer.coverage import read_lcov
 from codeland_analyzer.gitrepo import head_info, is_test, list_source_files
-from codeland_analyzer.layout import footprint_side, layout_city
+from codeland_analyzer.layout import footprint_side, layout_city, slots_from_model
 from codeland_analyzer.parse import FileMetrics, analyze_source
 from codeland_analyzer.resolve import is_relative, resolve
 
@@ -20,7 +20,14 @@ def district_id(path: str) -> str:
     return path or ROOT_DISTRICT_ID
 
 
-def analyze(repo: Path, *, churn_days: int = 180, coverage: Path | None = None) -> dict[str, Any]:
+def analyze(
+    repo: Path,
+    *,
+    churn_days: int = 180,
+    coverage: Path | None = None,
+    previous: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """previous: an earlier city model of the same repository, whose layout is kept stable."""
     repo = repo.resolve()
     files = list_source_files(repo)
     known = set(files)
@@ -54,7 +61,8 @@ def analyze(repo: Path, *, churn_days: int = 180, coverage: Path | None = None) 
     max_commits = max((churn.get(p, Churn()).commits for p in files), default=0) or 1
 
     district_rects, building_rects = layout_city(
-        {path: footprint_side(import_counts[path][0]) for path in files}
+        {path: footprint_side(import_counts[path][0]) for path in files},
+        slots_from_model(previous["districts"], previous["buildings"]) if previous else None,
     )
 
     buildings = []
