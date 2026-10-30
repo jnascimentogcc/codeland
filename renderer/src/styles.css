@@ -103,8 +103,9 @@ h2 {
 
 .controls {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 14px;
+  gap: 10px 14px;
   margin-top: 12px;
 }
 

@@ -17,8 +17,11 @@ export function createBuildingMaterial(): THREE.ShaderMaterial {
         uLayer: { value: 1 }, // 0 = structure, 1 = debt
         uSelected: { value: -1 },
         uHovered: { value: -1 },
+        uRings: { value: 1 }, // 1 = stacked rings, 0 = solid prism
       },
     ]),
+    // Rings are cut out of the prism, so their inner faces must render too.
+    side: THREE.DoubleSide,
     vertexShader: /* glsl */ `
       attribute float aHeat;
       attribute float aCoverage;
@@ -69,6 +72,7 @@ export function createBuildingMaterial(): THREE.ShaderMaterial {
     fragmentShader: /* glsl */ `
       uniform float uTime;
       uniform float uLayer;
+      uniform float uRings;
       varying vec2 vUv;
       varying vec3 vNormal;
       varying float vIsCap;
@@ -85,6 +89,7 @@ export function createBuildingMaterial(): THREE.ShaderMaterial {
       #include <fog_pars_fragment>
 
       const float FLOOR_HEIGHT = 0.9;
+      const float RING_FILL = 0.55; // share of each floor taken by the ring; the rest is a gap
 
       vec3 hsv2rgb(vec3 c) {
         vec3 p = abs(fract(c.xxx + vec3(0.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0);
@@ -100,23 +105,31 @@ export function createBuildingMaterial(): THREE.ShaderMaterial {
       }
 
       void main() {
-        vec3 n = normalize(vNormal);
+        vec3 n = normalize(gl_FrontFacing ? vNormal : -vNormal);
         bool isCap = vIsCap > 0.5;
+        bool rings = uRings > 0.5;
 
-        // Glowing edges: the six vertical edges and the roof rim.
+        // Floors counted from the roof down, so the top floor is always a whole ring under the
+        // roof plate; in ring mode the gap part of every floor is cut away.
+        float ringPos = fract((vTopY - vWorldY) / FLOOR_HEIGHT);
+        if (rings && !isCap && ringPos > RING_FILL) discard;
+
+        // Glowing edges: the six vertical edges, plus the roof rim (prism) or each ring's rims.
         float edge;
         if (isCap) {
           edge = smoothstep(0.74, 0.84, length(vUv - 0.5) * 2.0);
         } else {
           float u = fract(vUv.x * 6.0);
           float vertical = 1.0 - smoothstep(0.0, 0.03, min(u, 1.0 - u));
-          float rim = smoothstep(0.975, 1.0, vUv.y);
+          float rim = rings
+            ? 1.0 - smoothstep(0.0, 0.07, min(ringPos, RING_FILL - ringPos))
+            : smoothstep(0.975, 1.0, vUv.y);
           edge = max(vertical, rim);
         }
 
-        // One luminous band per "floor", so height can be read as stacked floors.
+        // Prism mode: one luminous band per "floor", so height can be read as stacked floors.
         float floorPos = fract((vWorldY - vBaseY) / FLOOR_HEIGHT);
-        float bands = isCap ? 0.0 : 1.0 - smoothstep(0.015, 0.05, abs(floorPos - 0.5));
+        float bands = isCap || rings ? 0.0 : 1.0 - smoothstep(0.015, 0.05, abs(floorPos - 0.5));
 
         vec3 accent = uLayer > 0.5
           ? heatColor(vHeat)
@@ -138,6 +151,8 @@ export function createBuildingMaterial(): THREE.ShaderMaterial {
         vec3 body = vec3(0.015, 0.03, 0.055) + accent * (0.04 + 0.08 * vHeat * uLayer);
         vec3 color = body + accent * fresnel * 0.45;
         color += accent * (edge * 2.6 + bands * 0.55) * intensity;
+        // Inner faces seen through the gaps stay dim, so rings read as hollow shells.
+        if (!gl_FrontFacing) color *= 0.3;
 
         if (vState > 0.5) {
           float boost = vState > 1.5 ? 1.8 : 1.35;

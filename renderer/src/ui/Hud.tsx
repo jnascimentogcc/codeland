@@ -1,11 +1,13 @@
 import type { Building, CodelandCityModel } from "../model/city-model";
-import { type CityView, hotspotRanking, type Layer } from "../model/view";
+import { type BuildingShape, type CityView, hotspotRanking, type Layer } from "../model/view";
 
 interface Props {
   model: CodelandCityModel;
   view: CityView;
   layer: Layer;
   onLayer: (layer: Layer) => void;
+  shape: BuildingShape;
+  onShape: (shape: BuildingShape) => void;
   showTests: boolean;
   onShowTests: (show: boolean) => void;
   selectedId: string | null;
@@ -14,7 +16,8 @@ interface Props {
 }
 
 export function Hud(props: Props) {
-  const { model, view, layer, onLayer, showTests, onShowTests, selectedId, onSelect } = props;
+  const { model, view, layer, onLayer, shape, onShape, showTests, onShowTests } = props;
+  const { selectedId, onSelect } = props;
   const selected = model.buildings.find((b) => b.id === selectedId);
   const hotspots = hotspotRanking(model, 10);
   const { repository } = model;
@@ -33,22 +36,24 @@ export function Hud(props: Props) {
           {model.analysis.churnWindowDays} dias de histórico
         </div>
         <div className="controls">
-          <div className="segmented" role="group" aria-label="Camada">
-            {(
-              [
-                ["structure", "Estrutura"],
-                ["debt", "Dívida"],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                className={layer === value ? "active" : ""}
-                onClick={() => onLayer(value)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            label="Camada"
+            value={layer}
+            onChange={onLayer}
+            options={[
+              ["structure", "Estrutura"],
+              ["debt", "Dívida"],
+            ]}
+          />
+          <Segmented
+            label="Forma"
+            value={shape}
+            onChange={onShape}
+            options={[
+              ["rings", "Anéis"],
+              ["prism", "Prisma"],
+            ]}
+          />
           <label className="toggle">
             <input
               type="checkbox"
@@ -112,6 +117,27 @@ export function Hud(props: Props) {
       </footer>
 
       {props.error && <div className="panel error">{props.error}</div>}
+    </div>
+  );
+}
+
+function Segmented<T extends string>(props: {
+  label: string;
+  value: T;
+  onChange: (value: T) => void;
+  options: [T, string][];
+}) {
+  return (
+    <div className="segmented" role="group" aria-label={props.label}>
+      {props.options.map(([value, text]) => (
+        <button
+          key={value}
+          className={props.value === value ? "active" : ""}
+          onClick={() => props.onChange(value)}
+        >
+          {text}
+        </button>
+      ))}
     </div>
   );
 }

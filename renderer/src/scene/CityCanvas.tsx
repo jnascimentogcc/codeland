@@ -3,7 +3,7 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { Bloom, EffectComposer, Noise, Vignette } from "@react-three/postprocessing";
 import { type ComponentRef, useEffect, useRef } from "react";
 import type { Edge } from "../model/city-model";
-import type { BuildingView, CityView, Layer } from "../model/view";
+import type { BuildingShape, BuildingView, CityView, Layer } from "../model/view";
 import { Buildings } from "./Buildings";
 import { Districts } from "./Districts";
 import { ImportArcs } from "./ImportArcs";
@@ -14,11 +14,12 @@ interface Props {
   view: CityView;
   edges: Edge[];
   layer: Layer;
+  shape: BuildingShape;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
 }
 
-export function CityCanvas({ view, edges, layer, selectedId, onSelect }: Props) {
+export function CityCanvas({ view, edges, layer, shape, selectedId, onSelect }: Props) {
   const selectedIndex = selectedId === null ? null : (view.indexById.get(selectedId) ?? null);
   const focus = selectedIndex === null ? null : (view.buildings[selectedIndex] ?? null);
   const size = Math.max(view.size, 10);
@@ -48,6 +49,7 @@ export function CityCanvas({ view, edges, layer, selectedId, onSelect }: Props) 
       <Buildings
         view={view}
         layer={layer}
+        shape={shape}
         selectedIndex={selectedIndex}
         onSelect={(i) => onSelect(view.buildings[i]?.building.id ?? null)}
       />

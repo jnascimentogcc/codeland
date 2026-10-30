@@ -2,6 +2,7 @@
 import type { Building, CodelandCityModel, District } from "./city-model";
 
 export type Layer = "structure" | "debt";
+export type BuildingShape = "rings" | "prism";
 
 export const PLATE_THICKNESS = 0.12;
 export const MIN_HEIGHT = 0.4;

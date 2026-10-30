@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CodelandCityModel } from "./model/city-model";
 import { loadDefaultModel, parseModel } from "./model/load";
-import { buildCityView, type Layer } from "./model/view";
+import { type BuildingShape, buildCityView, type Layer } from "./model/view";
 import { CityCanvas } from "./scene/CityCanvas";
 import { Hud } from "./ui/Hud";
 
@@ -9,6 +9,7 @@ export function App() {
   const [model, setModel] = useState<CodelandCityModel | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [layer, setLayer] = useState<Layer>("debt");
+  const [shape, setShape] = useState<BuildingShape>("rings");
   const [showTests, setShowTests] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -54,6 +55,7 @@ export function App() {
         view={view}
         edges={model.edges}
         layer={layer}
+        shape={shape}
         selectedId={selectedId}
         onSelect={setSelectedId}
       />
@@ -62,6 +64,8 @@ export function App() {
         view={view}
         layer={layer}
         onLayer={setLayer}
+        shape={shape}
+        onShape={setShape}
         showTests={showTests}
         onShowTests={setShowTests}
         selectedId={selectedId}
