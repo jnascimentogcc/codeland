@@ -7,15 +7,18 @@ dependencies = [
     # 0.26.0 crashes (access violation) while walking larger trees on Windows.
     "tree-sitter>=0.23,<0.26",
     "tree-sitter-typescript>=0.23",
+    "aiohttp>=3.11",
 ]
 
 [project.scripts]
 codeland-analyze = "codeland_analyzer.cli:main"
+codeland-live = "codeland_analyzer.live.cli:main"
 
 [dependency-groups]
 dev = [
     "jsonschema>=4.23",
     "pytest>=8.3",
+    "pytest-aiohttp>=1.1",
     "ruff>=0.8",
 ]
 
@@ -28,6 +31,8 @@ packages = ["src/codeland_analyzer"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.ruff]
 line-length = 100

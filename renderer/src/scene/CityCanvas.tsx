@@ -2,8 +2,11 @@ import { CameraControls, Grid } from "@react-three/drei";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Bloom, EffectComposer, Noise, Vignette } from "@react-three/postprocessing";
 import { type ComponentRef, useEffect, useRef } from "react";
+import type { Conflict, LiveState } from "../model/agents";
+import { visibleAgents } from "../model/agents";
 import type { Edge } from "../model/city-model";
 import type { BuildingShape, BuildingView, CityView, Layer } from "../model/view";
+import { AgentOrbs, ConflictMarkers } from "./Agents";
 import { Buildings } from "./Buildings";
 import { Districts } from "./Districts";
 import { ImportArcs } from "./ImportArcs";
@@ -15,11 +18,14 @@ interface Props {
   edges: Edge[];
   layer: Layer;
   shape: BuildingShape;
+  live: LiveState;
+  conflicts: Conflict[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
 }
 
-export function CityCanvas({ view, edges, layer, shape, selectedId, onSelect }: Props) {
+export function CityCanvas(props: Props) {
+  const { view, edges, layer, shape, live, conflicts, selectedId, onSelect } = props;
   const selectedIndex = selectedId === null ? null : (view.indexById.get(selectedId) ?? null);
   const focus = selectedIndex === null ? null : (view.buildings[selectedIndex] ?? null);
   const size = Math.max(view.size, 10);
@@ -50,10 +56,13 @@ export function CityCanvas({ view, edges, layer, shape, selectedId, onSelect }: 
         view={view}
         layer={layer}
         shape={shape}
+        live={live}
         selectedIndex={selectedIndex}
         onSelect={(i) => onSelect(view.buildings[i]?.building.id ?? null)}
       />
       <ImportArcs view={view} edges={edges} selectedId={selectedId} />
+      <AgentOrbs view={view} agents={visibleAgents(live)} />
+      <ConflictMarkers view={view} conflicts={conflicts} />
       <CameraRig size={size} focus={focus} />
       <EffectComposer multisampling={4}>
         <Bloom mipmapBlur intensity={1.1} luminanceThreshold={0.3} luminanceSmoothing={0.25} />

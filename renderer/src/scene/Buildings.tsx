@@ -2,17 +2,21 @@ import { Html } from "@react-three/drei";
 import { type ThreeEvent, useFrame } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
+import type { LiveState } from "../model/agents";
 import type { BuildingShape, CityView, Layer } from "../model/view";
 import { createBeamMaterial } from "./beamMaterial";
-import { createBuildingMaterial } from "./buildingMaterial";
+import { createBuildingMaterial, LIVE_EPOCH, NO_ACTIVITY } from "./buildingMaterial";
 
 interface Props {
   view: CityView;
   layer: Layer;
   shape: BuildingShape;
+  live: LiveState;
   selectedIndex: number | null;
   onSelect: (index: number) => void;
 }
+
+const LAYER_UNIFORM: Record<Layer, number> = { structure: 0, debt: 1, agents: 2 };
 
 const BEAM_RADIUS = 0.24; // relative to the tower radius
 const BEAM_OVERSHOOT = 0.8; // world units the beam rises above the roof
@@ -21,7 +25,7 @@ const BEAM_OVERSHOOT = 0.8; // world units the beam rises above the roof
  * All towers in one instanced draw call, plus (ring shape) one instanced draw call for the
  * light beams through their cores. Instance i of both meshes is building i.
  */
-export function Buildings({ view, layer, shape, selectedIndex, onSelect }: Props) {
+export function Buildings({ view, layer, shape, live, selectedIndex, onSelect }: Props) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const beamsRef = useRef<THREE.InstancedMesh>(null);
   const [hovered, setHovered] = useState<number | null>(null);
@@ -35,22 +39,41 @@ export function Buildings({ view, layer, shape, selectedIndex, onSelect }: Props
     const heat = attribute((i) => metrics(i).hotspot);
     const test = attribute((i) => (view.buildings[i]!.building.role === "test" ? 1 : 0));
     const hue = attribute((i) => view.buildings[i]!.moduleHue);
+    // Live agent activity, rewritten in place whenever an event arrives.
+    const agentHue = attribute(() => -1);
+    const activityAt = attribute(() => NO_ACTIVITY);
+    const activityKind = attribute(() => 0);
 
     // Hexagonal prism with a slight taper; unit height with its base at y = 0.
     const tower = new THREE.CylinderGeometry(0.84, 1, 1, 6, 1);
     tower.translate(0, 0.5, 0);
-    tower.setAttribute("aHeat", heat);
     tower.setAttribute("aCoverage", attribute((i) => metrics(i).coverage ?? -1));
-    tower.setAttribute("aTest", test);
-    tower.setAttribute("aHue", hue);
-
     const beam = new THREE.CylinderGeometry(1, 1, 1, 10, 1, true);
     beam.translate(0, 0.5, 0);
-    beam.setAttribute("aHeat", heat);
-    beam.setAttribute("aTest", test);
-    beam.setAttribute("aHue", hue);
+    for (const geo of [tower, beam]) {
+      geo.setAttribute("aHeat", heat);
+      geo.setAttribute("aTest", test);
+      geo.setAttribute("aHue", hue);
+      geo.setAttribute("aAgentHue", agentHue);
+      geo.setAttribute("aActivityAt", activityAt);
+      geo.setAttribute("aActivityKind", activityKind);
+    }
     return [tower, beam];
   }, [view]);
+
+  useEffect(() => {
+    const hues = geometry.getAttribute("aAgentHue") as THREE.InstancedBufferAttribute;
+    const at = geometry.getAttribute("aActivityAt") as THREE.InstancedBufferAttribute;
+    const kind = geometry.getAttribute("aActivityKind") as THREE.InstancedBufferAttribute;
+    view.buildings.forEach((b, i) => {
+      const activity = live.activity[b.building.path];
+      const agent = activity && live.agents[activity.agent];
+      hues.setX(i, agent ? agent.hue : -1);
+      at.setX(i, activity ? activity.ts - LIVE_EPOCH : NO_ACTIVITY);
+      kind.setX(i, activity?.kind === "edit" ? 1 : 0);
+    });
+    for (const attribute of [hues, at, kind]) attribute.needsUpdate = true;
+  }, [view, geometry, live.activity, live.agents]);
 
   useEffect(
     () => () => {
@@ -89,7 +112,7 @@ export function Buildings({ view, layer, shape, selectedIndex, onSelect }: Props
 
   useEffect(() => {
     for (const m of [material, beamMaterial]) {
-      m.uniforms.uLayer!.value = layer === "debt" ? 1 : 0;
+      m.uniforms.uLayer!.value = LAYER_UNIFORM[layer];
       m.uniforms.uSelected!.value = selectedIndex ?? -1;
       m.uniforms.uHovered!.value = hovered ?? -1;
     }
@@ -101,8 +124,11 @@ export function Buildings({ view, layer, shape, selectedIndex, onSelect }: Props
   }, [hovered]);
 
   useFrame(({ clock }) => {
-    material.uniforms.uTime!.value = clock.elapsedTime;
-    beamMaterial.uniforms.uTime!.value = clock.elapsedTime;
+    const now = Date.now() / 1000 - LIVE_EPOCH;
+    for (const m of [material, beamMaterial]) {
+      m.uniforms.uTime!.value = clock.elapsedTime;
+      m.uniforms.uNow!.value = now;
+    }
   });
 
   const hoveredView = hovered === null ? undefined : view.buildings[hovered];

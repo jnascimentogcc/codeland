@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://codeland.dev/schema/agent-event/0.1.0",
+  "title": "Codeland live message",
+  "description": "Messages the live server (codeland-live) sends to clients over its WebSocket. Raw hook payloads are normalized server-side; file contents, diffs and command output are never forwarded.",
+  "oneOf": [
+    { "$ref": "#/$defs/snapshot" },
+    { "$ref": "#/$defs/agentEvent" }
+  ],
+  "$defs": {
+    "snapshot": {
+      "description": "First message on every connection: recent history, oldest first.",
+      "type": "object",
+      "required": ["type", "schemaVersion", "repository", "events"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "snapshot" },
+        "schemaVersion": { "const": "0.1.0" },
+        "repository": { "type": "string", "description": "Name of the observed repository folder." },
+        "events": { "type": "array", "items": { "$ref": "#/$defs/agentEvent" } }
+      }
+    },
+    "agentEvent": {
+      "type": "object",
+      "required": ["type", "seq", "ts", "agent", "kind", "phase", "path", "tool", "detail"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "agent-event" },
+        "seq": { "type": "integer", "minimum": 1, "description": "Monotonic per server run." },
+        "ts": { "type": "number", "description": "Unix time in seconds." },
+        "agent": { "type": "string", "description": "Claude Code session id." },
+        "kind": {
+          "enum": ["session-start", "session-end", "idle", "read", "edit", "search", "command", "other"],
+          "description": "edit covers Write, Edit, MultiEdit and NotebookEdit; search covers Grep and Glob."
+        },
+        "phase": { "enum": ["start", "end", "status"], "description": "start = PreToolUse, end = PostToolUse, status = lifecycle." },
+        "path": { "type": ["string", "null"], "description": "Repository-relative target with forward slashes: a file for read/edit, a folder for search (\"\" = root); null when outside the repository or not applicable." },
+        "tool": { "type": ["string", "null"] },
+        "detail": { "type": ["string", "null"], "description": "Short human label (e.g. the Bash description or a truncated command)." }
+      }
+    }
+  }
+}

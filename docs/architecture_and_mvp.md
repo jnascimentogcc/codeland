@@ -167,6 +167,22 @@ Current limitations of the analyzer: tsconfig `paths`/`baseUrl` aliases count as
 
 Stable layout (2.3) is a requirement from phase 1 even though playback only arrives in phase 4: positions must not change between analysis runs, otherwise the live agents view also jumps around.
 
+### 4.2 Phase 2 technical decisions (live agents) — **Implemented, first version**
+
+```
+Claude Code session ──hooks (curl, 1 s timeout)──► codeland-live (aiohttp, 127.0.0.1:4317)
+                                                     POST /events   raw hook payload in
+                                                     GET  /ws       normalized events out ──► renderer
+```
+
+* **Capture:** Claude Code hooks (`PreToolUse`, `PostToolUse`, `SessionStart`, `Stop`, `SessionEnd`) installed by `codeland-live install-hooks <repo>` into `<repo>/.claude/settings.local.json` (personal, git-ignored). The hook is a `curl` that always exits 0, so a stopped server never slows or blocks the agent. Every Claude Code session is one agent (`session_id`).
+* **Privacy:** the server keeps only routing information (agent, kind, phase, repo-relative path, tool, a short label). File contents, edit strings, tool responses and full commands are dropped on arrival and never reach clients; the server binds to localhost only. This also covers the surveillance concern of 2.5 for agents; human presence remains out of scope.
+* **Contract:** `schema/agent-event.schema.json` (v0.1.0): a `snapshot` (recent history, sent on connect) followed by `agent-event` messages. Kinds: read, edit (Write/Edit/MultiEdit/NotebookEdit), search (Grep/Glob, targeting a folder), command (Bash), lifecycle (session-start, idle, session-end).
+* **Renderer — agents layer:** buildings dim to neutral; a file an agent read or edited lights up (rings and core beam) in the agent's colour and fades out (reads ~10 s, edits ~30 s). In every layer, agents are glowing orbs that fly to the file/folder they work on (hovering over the city centre for commands, parked around the city when idle), and the core beam of a touched file flares in the agent's colour. A **conflict** is a file edited by two or more live agents within 120 s: a spinning red ring over the tower and an alert in the agents panel.
+* **Demo without agents:** `codeland-live simulate <repo> --city <city.json>` replays realistic fake hook payloads (two agents, ending in a conflict on the hottest file).
+
+Not yet covered from the phase 2 scope: test results (Bash commands are shown, but their outcome is not parsed), and a per-session "what changed" view.
+
 ---
 
 ## 5. Key Risks

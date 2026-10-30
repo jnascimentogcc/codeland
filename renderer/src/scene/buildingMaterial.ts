@@ -1,5 +1,20 @@
 import * as THREE from "three";
 
+/** Clock origin for activity timestamps; float32 cannot hold Unix seconds precisely. */
+export const LIVE_EPOCH = Date.now() / 1000;
+/** aActivityAt value meaning "never touched". */
+export const NO_ACTIVITY = -1e9;
+
+/** Shared by the tower and beam shaders; needs uNow. */
+export const ACTIVITY_GLSL = /* glsl */ `
+  // 1 right after an agent touched the file, fading out (edits linger longer than reads).
+  float activity(float at, float kind) {
+    if (at < -1e8) return 0.0;
+    float tau = kind > 0.5 ? 30.0 : 10.0;
+    return exp(-max(uNow - at, 0.0) / tau);
+  }
+`;
+
 /**
  * Instanced "neon glass" material for the hexagonal towers.
  *
@@ -14,7 +29,8 @@ export function createBuildingMaterial(): THREE.ShaderMaterial {
       THREE.UniformsLib.fog,
       {
         uTime: { value: 0 },
-        uLayer: { value: 1 }, // 0 = structure, 1 = debt
+        uNow: { value: 0 }, // seconds since LIVE_EPOCH, the clock of aActivityAt
+        uLayer: { value: 1 }, // 0 = structure, 1 = debt, 2 = agents
         uSelected: { value: -1 },
         uHovered: { value: -1 },
         uRings: { value: 1 }, // 1 = stacked rings, 0 = solid prism
@@ -27,6 +43,9 @@ export function createBuildingMaterial(): THREE.ShaderMaterial {
       attribute float aCoverage;
       attribute float aTest;
       attribute float aHue;
+      attribute float aAgentHue;
+      attribute float aActivityAt;
+      attribute float aActivityKind;
       uniform float uSelected;
       uniform float uHovered;
       varying vec2 vUv;
@@ -40,6 +59,9 @@ export function createBuildingMaterial(): THREE.ShaderMaterial {
       varying float vCoverage;
       varying float vTest;
       varying float vHue;
+      varying float vAgentHue;
+      varying float vActivityAt;
+      varying float vActivityKind;
       varying float vState;
       varying float vSeed;
       #include <fog_pars_vertex>
@@ -61,6 +83,9 @@ export function createBuildingMaterial(): THREE.ShaderMaterial {
         vCoverage = aCoverage;
         vTest = aTest;
         vHue = aHue;
+        vAgentHue = aAgentHue;
+        vActivityAt = aActivityAt;
+        vActivityKind = aActivityKind;
         float id = float(gl_InstanceID);
         vState = id == uSelected ? 2.0 : (id == uHovered ? 1.0 : 0.0);
         vSeed = fract(sin(id * 12.9898) * 43758.5453);
@@ -71,6 +96,7 @@ export function createBuildingMaterial(): THREE.ShaderMaterial {
     `,
     fragmentShader: /* glsl */ `
       uniform float uTime;
+      uniform float uNow;
       uniform float uLayer;
       uniform float uRings;
       varying vec2 vUv;
@@ -84,9 +110,13 @@ export function createBuildingMaterial(): THREE.ShaderMaterial {
       varying float vCoverage;
       varying float vTest;
       varying float vHue;
+      varying float vAgentHue;
+      varying float vActivityAt;
+      varying float vActivityKind;
       varying float vState;
       varying float vSeed;
       #include <fog_pars_fragment>
+      ${ACTIVITY_GLSL}
 
       const float FLOOR_HEIGHT = 0.9;
       const float RING_FILL = 0.55; // share of each floor taken by the ring; the rest is a gap
@@ -131,12 +161,21 @@ export function createBuildingMaterial(): THREE.ShaderMaterial {
         float floorPos = fract((vWorldY - vBaseY) / FLOOR_HEIGHT);
         float bands = isCap || rings ? 0.0 : 1.0 - smoothstep(0.015, 0.05, abs(floorPos - 0.5));
 
-        vec3 accent = uLayer > 0.5
+        bool debt = abs(uLayer - 1.0) < 0.5;
+        bool agentsLayer = uLayer > 1.5;
+        vec3 accent = debt
           ? heatColor(vHeat)
-          : hsv2rgb(vec3(vHue, 0.75, 1.0));
-        float intensity = 1.0;
+          : agentsLayer ? vec3(0.30, 0.45, 0.65) : hsv2rgb(vec3(vHue, 0.75, 1.0));
+        float intensity = agentsLayer ? 0.35 : 1.0;
 
-        if (uLayer > 0.5) {
+        if (agentsLayer && vAgentHue >= 0.0) {
+          // Files the agents touched take the agent's colour, fading out over time.
+          float act = activity(vActivityAt, vActivityKind);
+          accent = mix(accent, hsv2rgb(vec3(vAgentHue, 0.7, 1.0)), min(act * 1.5, 1.0));
+          intensity += act * (vActivityKind > 0.5 ? 2.5 : 1.2);
+        }
+
+        if (debt) {
           // Hotspots pulse, faster and stronger as the score grows.
           intensity *= 1.0 + vHeat * 0.7 * sin(uTime * (1.2 + vHeat * 5.0) + vSeed * 6.28);
           // Poorly covered files lose their edge lights ("switched off").
@@ -148,7 +187,7 @@ export function createBuildingMaterial(): THREE.ShaderMaterial {
         }
 
         float fresnel = pow(1.0 - max(dot(n, normalize(vViewDir)), 0.0), 3.0);
-        vec3 body = vec3(0.015, 0.03, 0.055) + accent * (0.04 + 0.08 * vHeat * uLayer);
+        vec3 body = vec3(0.015, 0.03, 0.055) + accent * (0.04 + (debt ? 0.08 * vHeat : 0.0));
         vec3 color = body + accent * fresnel * 0.45;
         color += accent * (edge * 2.6 + bands * 0.55) * intensity;
         // Inner faces seen through the gaps stay dim, so rings read as hollow shells.

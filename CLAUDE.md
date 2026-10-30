@@ -6,7 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - `tree-sitter` is pinned `<0.26`: 0.26.0 crashes natively (access violation) on Windows when walking larger trees; `test_large_source_does_not_crash` guards it.
 - `schema/city-model.schema.json` – the city model contract (JSON Schema) between analyzers and clients. Changing the model means bumping `schemaVersion` here, `SCHEMA_VERSION` in `analyzer/src/codeland_analyzer/__init__.py` and `SUPPORTED_SCHEMA_VERSION` in `renderer/src/model/load.ts`, then running `npm run gen:types` in `renderer/`.
-- `analyzer/` – Python CLI (uv project) that builds the city model from a TypeScript git repository.
+- `schema/agent-event.schema.json` – the live contract: messages `codeland-live` sends over its WebSocket (snapshot + agent events). Generated into `renderer/src/model/agent-event.ts` by the same `npm run gen:types`.
+- `analyzer/` – Python CLI (uv project) that builds the city model from a TypeScript git repository. It also hosts `codeland-live` (`src/codeland_analyzer/live/`), the live agent server.
 - `renderer/` – React Three Fiber web app (Vite) that renders a city model. `three` is pinned `~0.186` because `postprocessing` 6.39 does not accept 0.187 yet.
 
 Run from `analyzer/`:
@@ -19,7 +20,12 @@ uv run ruff check . && uv run ruff format .    # lint + format
 uv run codeland-analyze <repo> -o city.json [--churn-days 180] [--coverage lcov.info] [--include-tests]
 uv run codeland-analyze <repo> -o ../renderer/public/city.json   # model the renderer loads by default
 uv run codeland-analyze <repo> -o city.json --previous city.json  # re-analyze keeping the layout stable
+uv run codeland-live serve <repo>              # live agent server on 127.0.0.1:4317 (POST /events, WS /ws)
+uv run codeland-live install-hooks <repo>      # forward Claude Code hooks of <repo> (settings.local.json); uninstall-hooks removes them
+uv run codeland-live simulate <repo> --city ../renderer/public/city.json   # fake agents for demos
 ```
+
+`.claude/launch.json` has `renderer` and `live` configurations (the latter serves `../PoC/bella-nina`, the test repository used during development).
 
 Run from `renderer/`:
 
@@ -29,7 +35,7 @@ npm run dev          # http://localhost:5173 (loads public/city.json, or ?model=
 npm run typecheck
 npm test             # vitest; single test: npx vitest run -t "centers the city"
 npm run build
-npm run gen:types    # regenerate src/model/city-model.ts from the schema (do not edit it by hand)
+npm run gen:types    # regenerate src/model/city-model.ts and agent-event.ts from the schemas (do not edit them by hand)
 ```
 
 `city.json` files are git-ignored: they are generated from other repositories.
@@ -52,7 +58,13 @@ The hotspot score is normalized **decisions** (complexity minus one per function
 - `src/model/view.ts` – pure mapping from the model to world space (city centered on the origin, height linear in LOC normalized over *all* buildings so hiding tests does not rescale, district plates stacked by depth, module hues). Unit-tested; keep three.js out of it.
 - `src/scene/` – `Buildings` draws every tower as one `InstancedMesh` with the custom shader in `buildingMaterial.ts` (per-instance attributes `aHeat`, `aCoverage`, `aTest`, `aHue`; uniforms for layer, time, hovered/selected instance, `uRings`). The default "rings" shape is the same prism with the gap of every floor discarded in the fragment shader (floors counted from the roof down; `DoubleSide` so inner faces show, dimmed), plus a second `InstancedMesh` of additive core beams (`beamMaterial.ts`, raycast disabled) sharing instance indices with the towers. The beam is reserved for agent activity in phase 2. The look must come from that shader and bloom, never from per-building meshes, so large repos stay one draw call. Colors above 1.0 are deliberate (they drive the bloom). Instances are scaled non-uniformly, so normals use the inverse scale in the vertex shader.
 - `Districts` (instanced plates + one line-segments outline), `ImportArcs` (bezier arcs; all faint, or only the selection's with flowing dashes), `CityCanvas` (scene, post-processing, camera rig with idle orbit and fly-to-selection).
-- `src/ui/Hud.tsx` – DOM overlay (layer switch, tests toggle, hotspot ranking, details); UI text is in Portuguese.
+- `src/ui/Hud.tsx` – DOM overlay (layer switch, shape switch, tests toggle, agents panel, hotspot ranking, details); UI text is in Portuguese.
+
+## Live agents
+
+- Server (`analyzer/src/codeland_analyzer/live/`): `normalize.py` turns a raw Claude Code hook payload into an agent event and is the privacy boundary (only agent, kind, phase, repo-relative path, tool and an 80-char label survive; never forward contents, diffs, tool responses or full commands). `server.py` keeps a bounded history, sends it as a snapshot on connect, then broadcasts. `hooks.py` installs a `curl ... || true # codeland-live` hook; the marker comment makes install idempotent and uninstall surgical.
+- Renderer: `src/live/useLive.ts` (WebSocket with reconnect; `?live=<url>` or `?live=off`), `src/model/agents.ts` (pure reducer + conflict detection, unit-tested), `src/scene/Agents.tsx` (orbs, conflict rings). Per-building activity goes into the instanced attributes `aAgentHue`/`aActivityAt`/`aActivityKind` shared by tower and beam geometries; fading happens in the shaders against `uNow`. Activity timestamps are stored relative to `LIVE_EPOCH` because float32 cannot hold Unix seconds precisely.
+- Layer uniform: 0 structure, 1 debt, 2 agents. In the agents layer towers go neutral and only activity colours them; in other layers activity shows only on the core beam and the orbs.
 
 ## Project concept
 

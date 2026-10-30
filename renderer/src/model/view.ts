@@ -1,7 +1,7 @@
 // Pure mapping from the city model to world-space values for the scene (no three.js here).
 import type { Building, CodelandCityModel, District } from "./city-model";
 
-export type Layer = "structure" | "debt";
+export type Layer = "structure" | "debt" | "agents";
 export type BuildingShape = "rings" | "prism";
 
 export const PLATE_THICKNESS = 0.12;

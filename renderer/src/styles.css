@@ -315,6 +315,116 @@ h2 {
   font-size: 11px;
 }
 
+.live-status {
+  float: right;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+
+.live-status.live {
+  color: #45f0a0;
+  text-shadow: 0 0 8px rgba(69, 240, 160, 0.7);
+}
+
+.live-status.offline {
+  color: var(--hot);
+}
+
+.agent-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.agent-list button {
+  display: grid;
+  grid-template-columns: 10px 1fr;
+  column-gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 6px;
+  text-align: left;
+  font-size: 12px;
+}
+
+.agent-list button:not(:disabled):hover {
+  background: rgba(95, 227, 255, 0.08);
+}
+
+.agent-list button:disabled {
+  cursor: default;
+}
+
+.agent-list i {
+  grid-row: span 3;
+  align-self: start;
+  width: 10px;
+  height: 10px;
+  margin-top: 3px;
+  border-radius: 50%;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.agent-name {
+  font-weight: 600;
+}
+
+.agent-action {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-counts {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.conflict {
+  display: block;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 59, 92, 0.6);
+  border-radius: 6px;
+  background: rgba(255, 59, 92, 0.12);
+  color: #ffc2cc;
+  font-size: 12px;
+  text-align: left;
+  animation: conflict-pulse 1.2s ease-in-out infinite;
+}
+
+.conflict span {
+  display: block;
+  color: var(--muted);
+}
+
+@keyframes conflict-pulse {
+  50% {
+    box-shadow: 0 0 16px rgba(255, 59, 92, 0.45);
+  }
+}
+
+.agent-label {
+  display: grid;
+  padding: 3px 8px;
+  border-left: 2px solid;
+  background: rgba(3, 8, 16, 0.8);
+  font-size: 11px;
+  white-space: nowrap;
+  transform: translateY(-50%);
+}
+
+.agent-label span {
+  color: var(--muted);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 @media (max-width: 760px) {
   .side {
     top: auto;

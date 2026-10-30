@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLive, useNow } from "./live/useLive";
+import { conflicts as findConflicts } from "./model/agents";
 import type { CodelandCityModel } from "./model/city-model";
 import { loadDefaultModel, parseModel } from "./model/load";
 import { type BuildingShape, buildCityView, type Layer } from "./model/view";
@@ -12,6 +14,9 @@ export function App() {
   const [shape, setShape] = useState<BuildingShape>("rings");
   const [showTests, setShowTests] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const live = useLive();
+  const now = useNow();
+  const conflicts = useMemo(() => findConflicts(live.state, now), [live.state, now]);
 
   useEffect(() => {
     loadDefaultModel().then(setModel, (e: Error) => setError(e.message));
@@ -56,10 +61,15 @@ export function App() {
         edges={model.edges}
         layer={layer}
         shape={shape}
+        live={live.state}
+        conflicts={conflicts}
         selectedId={selectedId}
         onSelect={setSelectedId}
       />
       <Hud
+        live={live.state}
+        liveStatus={live.status}
+        conflicts={conflicts}
         model={model}
         view={view}
         layer={layer}

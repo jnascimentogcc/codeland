@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "gen:types": "json2ts -i ../schema/city-model.schema.json -o src/model/city-model.ts --no-additionalProperties --bannerComment \"/* Generated from schema/city-model.schema.json by npm run gen:types. Do not edit. */\""
+    "gen:types": "json2ts -i ../schema/city-model.schema.json -o src/model/city-model.ts --no-additionalProperties --bannerComment \"/* Generated from schema/city-model.schema.json by npm run gen:types. Do not edit. */\" && json2ts -i ../schema/agent-event.schema.json -o src/model/agent-event.ts --no-additionalProperties --bannerComment \"/* Generated from schema/agent-event.schema.json by npm run gen:types. Do not edit. */\""
   },
   "dependencies": {
     "@react-three/drei": "^10.7.9",

@@ -1,7 +1,19 @@
+import type { LiveStatus } from "../live/useLive";
+import { type Conflict, describeAction, type LiveState, visibleAgents } from "../model/agents";
 import type { Building, CodelandCityModel } from "../model/city-model";
 import { type BuildingShape, type CityView, hotspotRanking, type Layer } from "../model/view";
 
+const STATUS_LABEL: Record<LiveStatus, string> = {
+  off: "desligado",
+  connecting: "conectando",
+  live: "ao vivo",
+  offline: "sem servidor",
+};
+
 interface Props {
+  live: LiveState;
+  liveStatus: LiveStatus;
+  conflicts: Conflict[];
   model: CodelandCityModel;
   view: CityView;
   layer: Layer;
@@ -43,6 +55,7 @@ export function Hud(props: Props) {
             options={[
               ["structure", "Estrutura"],
               ["debt", "Dívida"],
+              ["agents", "Agentes"],
             ]}
           />
           <Segmented
@@ -67,6 +80,13 @@ export function Hud(props: Props) {
 
       <aside className="side">
         {selected && <Details building={selected} onClose={() => onSelect(null)} />}
+        <AgentsPanel
+          live={props.live}
+          status={props.liveStatus}
+          conflicts={props.conflicts}
+          onSelect={onSelect}
+          known={(path) => model.buildings.some((b) => b.id === path)}
+        />
         <section className="panel">
           <h2>Pontos críticos</h2>
           {hotspots.length === 0 && <p className="muted">Nenhum arquivo com mudanças e decisões.</p>}
@@ -89,7 +109,12 @@ export function Hud(props: Props) {
       </aside>
 
       <footer className="panel legend">
-        {layer === "debt" ? (
+        {layer === "agents" ? (
+          <div className="muted">
+            Prédio e feixe acendem na cor do agente que leu (fraco) ou editou (forte) o arquivo e
+            apagam com o tempo · anel vermelho = dois agentes editando o mesmo arquivo
+          </div>
+        ) : layer === "debt" ? (
           <>
             <div className="gradient" />
             <div className="legend-scale">
@@ -118,6 +143,57 @@ export function Hud(props: Props) {
 
       {props.error && <div className="panel error">{props.error}</div>}
     </div>
+  );
+}
+
+function AgentsPanel(props: {
+  live: LiveState;
+  status: LiveStatus;
+  conflicts: Conflict[];
+  onSelect: (id: string | null) => void;
+  known: (path: string) => boolean;
+}) {
+  const { live, status, conflicts } = props;
+  if (status === "off") return null;
+  const agents = visibleAgents(live);
+  const name = (id: string) => live.agents[id]?.name ?? id.slice(0, 4);
+
+  return (
+    <section className="panel agents">
+      <h2>
+        Agentes <span className={`live-status ${status}`}>{STATUS_LABEL[status]}</span>
+      </h2>
+      {conflicts.map((c) => (
+        <button key={c.path} className="conflict" onClick={() => props.onSelect(c.path)}>
+          <b>Conflito</b> {c.path}
+          <span>{c.agents.map(name).join(" × ")}</span>
+        </button>
+      ))}
+      {agents.length === 0 && (
+        <p className="muted">
+          {status === "live"
+            ? "Nenhum agente ativo. Abra o Claude Code no repositório com os hooks instalados."
+            : "Inicie: uv run codeland-live serve <repo>"}
+        </p>
+      )}
+      <ul className="agent-list">
+        {agents.map((agent) => {
+          const target = agent.target && props.known(agent.target) ? agent.target : null;
+          return (
+            <li key={agent.id}>
+              <button disabled={!target} onClick={() => target && props.onSelect(target)}>
+                <i style={{ background: `hsl(${agent.hue * 360} 85% 60%)` }} />
+                <span className="agent-name">{agent.name}</span>
+                <span className="agent-action">{describeAction(agent)}</span>
+                <span className="agent-counts">
+                  {agent.reads} leituras · {agent.edits} edições · {agent.commands} comandos
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 
