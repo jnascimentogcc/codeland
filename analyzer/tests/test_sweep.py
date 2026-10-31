@@ -67,7 +67,7 @@ def test_normalize_enforces_the_contract():
     assert driver["properties"]["codeland/kind"] == "agent"
     assert [r["ruleId"] for r in run["results"]] == [
         "agent/security/command-injection",
-        "agent/security/other-thing",
+        "agent/security/other",  # outside the closed vocabulary
     ]
     assert [r["id"] for r in driver["rules"]] == [r["ruleId"] for r in run["results"]]
     assert len(report.notes) == 1  # one result without a fingerprint
@@ -128,3 +128,63 @@ def test_cli_writes_the_sarif_and_reanalyzes_the_city(repo, monkeypatch, tmp_pat
     assert agent_finding["location"]["path"] == "src/main.ts"
     assert model["analysis"]["trend"] is not None  # the old city file was the --previous model
     assert sarif.exists()
+
+
+def test_slugs_are_canonical_and_symbols_are_reduced_so_ids_survive_rewording():
+    first = normalize(
+        answer(
+            result("untrusted-websocket-url", "src/main.ts", 3, "untrusted-url:useLive.liveUrl")
+        ),
+        "security",
+        "m",
+        FILES,
+    )
+    second = normalize(
+        answer(result("Untrusted_Input", "src/main.ts", 9, "untrusted-input:liveUrl")),
+        "security",
+        "m",
+        FILES,
+    )
+    # "untrusted-websocket-url" is not in the vocabulary; "untrusted-input" is.
+    a = first.document["runs"][0]["results"][0]
+    b = second.document["runs"][0]["results"][0]
+    assert a["fingerprints"]["codeland/finding/v1"] == "other:liveUrl"
+    assert b["fingerprints"]["codeland/finding/v1"] == "untrusted-input:liveUrl"
+    assert (
+        normalize(
+            answer(
+                result("untrusted-input", "src/main.ts", 3, "x:a.liveUrl"),
+                result("untrusted-input", "src/main.ts", 9, "y:liveUrl"),
+            ),
+            "security",
+            "m",
+            FILES,
+        ).results
+        == 1
+    )  # same slug and symbol twice is one finding
+
+
+def test_runs_are_merged_by_finding_identity(repo):
+    make_sample(repo)
+    replies = iter(
+        [
+            answer(result("injection", "src/main.ts", 4, "injection:a")),
+            answer(),  # a run that finds nothing
+            answer(
+                result("injection", "src/main.ts", 4, "injection:a"),
+                result("command-injection", "src/util.ts", 1, "x:b"),
+            ),
+        ]
+    )
+
+    report = sweep(repo.root, "security", agent=lambda *a: next(replies), runs=3)
+
+    run = report.document["runs"][0]
+    assert report.results == 2
+    assert [r["ruleId"] for r in run["results"]] == [
+        "agent/security/other",
+        "agent/security/command-injection",
+    ]
+    assert [r["id"] for r in run["tool"]["driver"]["rules"]] == sorted(
+        {r["ruleId"] for r in run["results"]}
+    )

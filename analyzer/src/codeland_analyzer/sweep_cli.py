@@ -30,6 +30,12 @@ def main(argv: list[str] | None = None) -> int:
         "--budget", type=float, default=2.0, help="spending cap in USD for the session (default: 2)"
     )
     parser.add_argument(
+        "--runs",
+        type=int,
+        default=1,
+        help="run the agent N times and keep the union of its findings (default: 1)",
+    )
+    parser.add_argument(
         "--path",
         action="append",
         default=[],
@@ -55,7 +61,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         print(f"sweeping {args.repo} for {args.kind} with {args.model}...", file=sys.stderr)
         report = sweep(
-            args.repo, args.kind, model=args.model, budget=args.budget, paths=args.path or None
+            args.repo,
+            args.kind,
+            model=args.model,
+            budget=args.budget,
+            paths=args.path or None,
+            runs=args.runs,
         )
         output.write_text(json.dumps(report.document, indent=2) + "\n", encoding="utf-8")
         print(f"{output}: {report.results} findings", file=sys.stderr)
