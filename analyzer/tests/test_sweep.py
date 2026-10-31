@@ -5,6 +5,7 @@ import pytest
 from test_build import SCHEMA, make_sample
 
 from codeland_analyzer.build import analyze
+from codeland_analyzer.gitrepo import list_source_files
 from codeland_analyzer.sarif import read_sarif
 from codeland_analyzer.sweep import SweepError, normalize, sweep
 from codeland_analyzer.sweep_cli import main
@@ -188,3 +189,40 @@ def test_runs_are_merged_by_finding_identity(repo):
     assert [r["id"] for r in run["tool"]["driver"]["rules"]] == sorted(
         {r["ruleId"] for r in run["results"]}
     )
+
+
+def test_chunks_split_the_scope_and_a_failed_session_does_not_lose_the_rest(repo):
+    make_sample(repo)
+    prompts = []
+
+    def agent(prompt, cwd, model, budget):
+        prompts.append(prompt)
+        if "- src/util.ts\n" in prompt:
+            raise SweepError("claude failed")
+        return answer(result("injection", "src/main.ts", 4, "injection:a"))
+
+    report = sweep(repo.root, "security", agent=agent, chunk=1)
+
+    sessions = len(prompts)
+    assert sessions == len(list_source_files(repo.root))
+    assert all(sum(line.startswith("- src/") for line in p.splitlines()) == 1 for p in prompts)
+    assert report.results == 1  # only the session that had main.ts in scope keeps the result
+    assert report.notes == [f"1 of {sessions} sessions failed: claude failed"]
+    with pytest.raises(SweepError, match="boom"):
+        sweep(repo.root, "security", agent=lambda *a: (_ for _ in ()).throw(SweepError("boom")))
+
+
+def test_a_bare_string_message_is_corrected_and_the_importer_tolerates_it(repo):
+    make_sample(repo)
+    item = result("injection", "src/main.ts", 4, "injection:a")
+    item["message"] = "plain text instead of an object"
+
+    report = normalize(answer(item), "security", "m", FILES)
+
+    assert report.document["runs"][0]["results"][0]["message"] == {
+        "text": "plain text instead of an object"
+    }
+    path = repo.root.parent / "bare.sarif"
+    path.write_text(answer(item), encoding="utf-8")  # raw, uncorrected
+    (finding,) = read_sarif(path, repo.root).findings
+    assert finding["message"] == "plain text instead of an object"

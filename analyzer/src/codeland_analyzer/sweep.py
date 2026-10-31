@@ -154,20 +154,40 @@ def sweep(
     budget: float = 2.0,
     paths: list[str] | None = None,
     runs: int = 1,
+    chunk: int | None = None,
 ) -> SweepReport:
-    """Runs the agent and returns a normalized SARIF document (see `normalize`)."""
+    """Runs the agent and returns a normalized SARIF document (see `normalize`).
+
+    chunk: review at most this many files per session (sorted, so folders stay together) and merge
+    the results; one session over a large scope reads a different subset each time (docs 6.10).
+    runs: sessions per chunk, merged by finding identity.
+    """
     if kind not in KINDS:
         raise SweepError(f"unknown kind {kind!r}; choose one of {', '.join(KINDS)}")
     repo = repo.resolve()
     files = [p for p in list_source_files(repo) if not paths or any(p.startswith(x) for x in paths)]
     if not files:
         raise SweepError("no TypeScript files in scope")
-    prompt = build_prompt(kind, files)
-    reports = [
-        normalize((agent or run_claude)(prompt, repo, model, budget), kind, model, set(files))
-        for _ in range(max(runs, 1))
-    ]
-    return reports[0] if len(reports) == 1 else merge(reports)
+    files.sort()  # neighbours in the sorted list share folders, so chunks stay coherent
+    groups = [files[i : i + chunk] for i in range(0, len(files), chunk)] if chunk else [files]
+    reports: list[SweepReport] = []
+    failures: list[str] = []
+    for group in groups:
+        prompt = build_prompt(kind, group)
+        for _ in range(max(runs, 1)):
+            try:
+                answer = (agent or run_claude)(prompt, repo, model, budget)
+                reports.append(normalize(answer, kind, model, set(group)))
+            except SweepError as error:  # one failed session must not cost the others
+                failures.append(str(error))
+    if not reports:
+        raise SweepError(failures[0])
+    report = reports[0] if len(reports) == 1 else merge(reports)
+    if failures:
+        report.notes.append(
+            f"{len(failures)} of {len(failures) + len(reports)} sessions failed: {failures[0]}"
+        )
+    return report
 
 
 def normalize(answer: str, kind: str, model: str, files: set[str]) -> SweepReport:
@@ -185,6 +205,8 @@ def normalize(answer: str, kind: str, model: str, files: set[str]) -> SweepRepor
             dropped += 1
             continue
         result["ruleId"] = _rule_id(kind, result["ruleId"])
+        if isinstance(result.get("message"), str):  # models sometimes write the bare string
+            result["message"] = {"text": result["message"]}
         fingerprint, named = _fingerprint(result)
         unnamed += not named
         result["fingerprints"] = {

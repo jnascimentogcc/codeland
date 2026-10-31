@@ -149,6 +149,8 @@ def _text(value: object) -> str | None:
 
 def _message(item: dict[str, Any]) -> str:
     message = item.get("message") or {}
+    if isinstance(message, str):  # not valid SARIF, but agents write it
+        message = {"text": message}
     text = message.get("text") or message.get("markdown") or ""
     text = _WHITESPACE.sub(" ", str(text)).strip()
     return text if len(text) <= MESSAGE_MAX else text[: MESSAGE_MAX - 1] + "…"

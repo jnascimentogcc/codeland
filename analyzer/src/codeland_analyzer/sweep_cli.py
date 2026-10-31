@@ -36,6 +36,12 @@ def main(argv: list[str] | None = None) -> int:
         help="run the agent N times and keep the union of its findings (default: 1)",
     )
     parser.add_argument(
+        "--chunk",
+        type=int,
+        help="review at most N files per session and merge the results; recommended above ~40 "
+        "files, where a single session reads a different subset each time",
+    )
+    parser.add_argument(
         "--path",
         action="append",
         default=[],
@@ -67,6 +73,7 @@ def main(argv: list[str] | None = None) -> int:
             budget=args.budget,
             paths=args.path or None,
             runs=args.runs,
+            chunk=args.chunk,
         )
         output.write_text(json.dumps(report.document, indent=2) + "\n", encoding="utf-8")
         print(f"{output}: {report.results} findings", file=sys.stderr)
