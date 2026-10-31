@@ -18,6 +18,9 @@ uv run pytest                                  # all tests
 uv run pytest tests/test_parse.py::test_metrics_of_typescript_source   # single test
 uv run ruff check . && uv run ruff format .    # lint + format
 uv run codeland-analyze <repo> -o city.json [--churn-days 180] [--coverage lcov.info] [--include-tests]
+# LCOV for a vitest repo, without touching its package.json: npm i --no-save @vitest/coverage-v8, then
+#   npx vitest run --coverage.enabled --coverage.reporter=lcovonly --coverage.reportsDirectory=<dir outside the repo>
+# Files the tests never load are absent from the LCOV, so their coverage stays unknown (not dimmed), not 0.
 uv run codeland-analyze <repo> -o ../renderer/public/city.json   # model the renderer loads by default
 uv run codeland-analyze <repo> -o city.json --previous city.json  # re-analyze keeping the layout stable
 uv run codeland-live serve <repo>              # live agent server on 127.0.0.1:4317 (POST /events, WS /ws)
