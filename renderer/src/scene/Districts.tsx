@@ -4,6 +4,8 @@ import * as THREE from "three";
 import { type CityView, PLATE_THICKNESS } from "../model/view";
 
 const LABEL_MAX_DEPTH = 2;
+// Served from public/: without an explicit font, troika fetches one from a CDN at runtime.
+const LABEL_FONT = `${import.meta.env.BASE_URL}fonts/inter-latin-600.woff`;
 
 /** District plates (one instanced mesh) with neon outlines (one line segments geometry). */
 export function Districts({ view }: { view: CityView }) {
@@ -63,6 +65,7 @@ export function Districts({ view }: { view: CityView }) {
         .map((d) => (
           <Text
             key={d.district.id}
+            font={LABEL_FONT}
             position={[
               d.x - d.width / 2 + 0.4,
               d.elevation + PLATE_THICKNESS + 0.02,

@@ -35,6 +35,13 @@ def list_source_files(repo: Path) -> list[str]:
     return sorted(p for p in paths if (repo / p).is_file())
 
 
+def list_tsconfigs(repo: Path) -> list[str]:
+    """Every tsconfig.json of the repository (same rules as `list_source_files`)."""
+    out = git(repo, "ls-files", "-z", "--cached", "--others", "--exclude-standard")
+    paths = {p for p in out.split("\0") if p.rsplit("/", 1)[-1] == "tsconfig.json"}
+    return sorted(p for p in paths if (repo / p).is_file())
+
+
 def head_info(repo: Path) -> tuple[str | None, str | None]:
     """(commit SHA, branch name); None for each when unborn or detached."""
     try:

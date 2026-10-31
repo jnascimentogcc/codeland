@@ -174,7 +174,7 @@ Every visual element must link back to the real artifact: clicking a building op
 
 **Stable layout (implemented, see 2.3):** `codeland-analyze --previous <city.json>` keeps every child at its previous position inside its district. Removed files leave a vacant lot, new files are appended after the existing ones, and only growth pushes neighbours (a wider child pushes the later children of its row, a deeper row pushes the rows below). On bella-nina, adding one file and removing another moved 4 of 26 buildings by 2 units, against 20 of 26 by up to 10 units with a fresh layout. Vacant lots accumulate over time; a run without `--previous` re-plans the city compactly (a deliberate "re-zoning", not something to do on every run).
 
-Current limitations of the analyzer: tsconfig `paths`/`baseUrl` aliases count as external imports; growth has no slack, so a building gaining one import still shifts its later neighbours by a small amount.
+Current limitations of the analyzer: tsconfig `paths`/`baseUrl` aliases resolve through the nearest tsconfig.json (relative `extends` followed, longest pattern prefix wins) and only when they land on a repository file, so aliases defined elsewhere (bundler config, package `exports`) still count as external; growth has no slack, so a building gaining one import still shifts its later neighbours by a small amount.
 
 Stable layout (2.3) is a requirement from phase 1 even though playback only arrives in phase 4: positions must not change between analysis runs, otherwise the live agents view also jumps around.
 

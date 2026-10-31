@@ -97,3 +97,16 @@ def test_cli_writes_model_and_lists_hotspots(repo, tmp_path, capsys):
     assert "4 files, 2 folders, 2 imports" in stderr
     assert "1.00  src/main.ts" in stderr
     assert "main.test.ts" not in stderr  # tests are left out of the ranking by default
+
+
+def test_aliased_imports_become_edges_not_external(repo):
+    repo.write(
+        "tsconfig.json", '{"compilerOptions": {"baseUrl": ".", "paths": {"@lib/*": ["src/lib/*"]}}}'
+    )
+    repo.write("src/lib/util.ts", "export const x = 1;\n")
+    repo.write("src/main.ts", 'import { x } from "@lib/util";\nimport "react";\nexport { x };\n')
+    repo.commit()
+    model = analyze(repo.root)
+    assert {"from": "src/main.ts", "to": "src/lib/util.ts", "kind": "import"} in model["edges"]
+    main = next(b for b in model["buildings"] if b["path"] == "src/main.ts")
+    assert (main["metrics"]["imports"], main["metrics"]["externalImports"]) == (2, 1)

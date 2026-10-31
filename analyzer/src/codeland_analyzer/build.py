@@ -9,11 +9,11 @@ from codeland_analyzer import SCHEMA_VERSION
 from codeland_analyzer.churn import Churn, collect_churn
 from codeland_analyzer.coverage import read_lcov
 from codeland_analyzer.dedupe import mark_duplicates
-from codeland_analyzer.gitrepo import head_info, is_test, list_source_files
+from codeland_analyzer.gitrepo import head_info, is_test, list_source_files, list_tsconfigs
 from codeland_analyzer.layout import footprint_side, layout_city, slots_from_model
 from codeland_analyzer.native import DEFAULT_THRESHOLDS, SOURCE, NativeThresholds, native_findings
 from codeland_analyzer.parse import FileMetrics, analyze_source
-from codeland_analyzer.resolve import is_relative, resolve
+from codeland_analyzer.resolve import is_relative, load_tsconfigs, resolve
 from codeland_analyzer.sarif import read_sarif
 from codeland_analyzer.trend import apply_trend
 from codeland_analyzer.triage import apply_triage, read_triage
@@ -46,6 +46,7 @@ def analyze(
     repo = repo.resolve()
     files = list_source_files(repo)
     known = set(files)
+    tsconfigs = load_tsconfigs(repo, list_tsconfigs(repo))
     parsed: dict[str, FileMetrics] = {
         path: analyze_source((repo / path).read_bytes(), tsx=path.endswith(".tsx"))
         for path in files
@@ -60,7 +61,7 @@ def analyze(
         external: set[str] = set()
         seen_edges: set[tuple[str, str]] = set()
         for ref in metrics.imports:
-            target = resolve(path, ref.specifier, known)
+            target = resolve(path, ref.specifier, known, tsconfigs)
             if target is None:
                 (targets if is_relative(ref.specifier) else external).add(ref.specifier)
                 continue
