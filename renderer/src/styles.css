@@ -359,7 +359,7 @@ h2 {
 }
 
 .agent-list i {
-  grid-row: span 3;
+  grid-row: span 4;
   align-self: start;
   width: 10px;
   height: 10px;
@@ -381,6 +381,19 @@ h2 {
 .agent-counts {
   color: var(--muted);
   font-size: 11px;
+}
+
+.agent-tests {
+  grid-column: 2;
+  font-size: 11px;
+}
+
+.agent-tests.pass {
+  color: #45f0a0;
+}
+
+.agent-tests.fail {
+  color: var(--hot);
 }
 
 .conflict {
@@ -434,4 +447,49 @@ h2 {
   .legend {
     display: none;
   }
+}
+
+.changes {
+  margin: 2px 8px 6px 26px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.changes summary {
+  cursor: pointer;
+}
+
+.changes ul {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.changes button {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 2px 0;
+  font-size: 11px;
+  text-align: left;
+}
+
+.changes button:disabled {
+  cursor: default;
+}
+
+.changes .path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+}
+
+.changes .worse {
+  color: var(--warm);
+}
+
+.changes .better {
+  color: #45f0a0;
 }

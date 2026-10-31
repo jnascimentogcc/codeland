@@ -10,7 +10,7 @@ export type CodelandLiveMessage = Snapshot | AgentEvent;
  */
 export interface Snapshot {
   type: "snapshot";
-  schemaVersion: "0.1.0";
+  schemaVersion: "0.3.0";
   /**
    * Name of the observed repository folder.
    */
@@ -36,7 +36,7 @@ export interface AgentEvent {
    */
   kind: "session-start" | "session-end" | "idle" | "read" | "edit" | "search" | "command" | "other";
   /**
-   * start = PreToolUse, end = PostToolUse, status = lifecycle.
+   * start = PreToolUse, end = PostToolUse or PostToolUseFailure, status = lifecycle.
    */
   phase: "start" | "end" | "status";
   /**
@@ -48,4 +48,43 @@ export interface AgentEvent {
    * Short human label (e.g. the Bash description or a truncated command).
    */
   detail: string | null;
+  /**
+   * Verdict of a finished test command (vitest, jest, pytest, npm test, ...); null for every other event. Only the verdict and counts are forwarded, never the output.
+   */
+  tests: null | TestRun;
+  /**
+   * Effect of a finished edit of a TypeScript file, measured on disk: metrics before the agent's first edit of that file and now. Null for every other event.
+   */
+  change: null | FileChange;
+}
+export interface TestRun {
+  /**
+   * fail when the command exited non-zero or reported failed tests.
+   */
+  outcome: "pass" | "fail";
+  /**
+   * Passed tests when the summary could be parsed.
+   */
+  passed: number | null;
+  /**
+   * Failed tests when the summary could be parsed.
+   */
+  failed: number | null;
+}
+export interface FileChange {
+  /**
+   * Null when the agent created the file.
+   */
+  before: null | FileSize;
+  /**
+   * Null when the file no longer exists.
+   */
+  after: null | FileSize;
+}
+export interface FileSize {
+  loc: number;
+  /**
+   * Branching points (complexity minus one per function).
+   */
+  decisions: number;
 }

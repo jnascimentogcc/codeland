@@ -1,5 +1,13 @@
 import type { LiveStatus } from "../live/useLive";
-import { type Conflict, describeAction, type LiveState, visibleAgents } from "../model/agents";
+import {
+  type AgentState,
+  type Conflict,
+  describeAction,
+  describeTests,
+  type LiveState,
+  summarizeChanges,
+  visibleAgents,
+} from "../model/agents";
 import type { Building, CodelandCityModel } from "../model/city-model";
 import { type BuildingShape, type CityView, hotspotRanking, type Layer } from "../model/view";
 
@@ -188,12 +196,58 @@ function AgentsPanel(props: {
                 <span className="agent-counts">
                   {agent.reads} leituras · {agent.edits} edições · {agent.commands} comandos
                 </span>
+                {agent.tests && (
+                  <span className={`agent-tests ${agent.tests.outcome}`}>
+                    {agent.tests.outcome === "pass" ? "✓" : "✗"} {describeTests(agent.tests)}
+                  </span>
+                )}
               </button>
+              <Changes agent={agent} onSelect={props.onSelect} known={props.known} />
             </li>
           );
         })}
       </ul>
     </section>
+  );
+}
+
+const signed = (n: number) => (n > 0 ? `+${n}` : String(n));
+
+/** What the agent changed: decisions are the debt signal (+ = more branching to maintain). */
+function Changes(props: {
+  agent: AgentState;
+  onSelect: (id: string | null) => void;
+  known: (path: string) => boolean;
+}) {
+  const { files, loc, decisions } = summarizeChanges(props.agent);
+  if (files.length === 0) return null;
+  return (
+    <details className="changes">
+      <summary>
+        {files.length} {files.length === 1 ? "arquivo alterado" : "arquivos alterados"} ·{" "}
+        {signed(loc)} linhas ·{" "}
+        <span className={decisions > 0 ? "worse" : decisions < 0 ? "better" : ""}>
+          {signed(decisions)} decisões
+        </span>
+      </summary>
+      <ul>
+        {files.map((f) => (
+          <li key={f.path}>
+            <button
+              disabled={!props.known(f.path)}
+              onClick={() => props.onSelect(f.path)}
+              title={f.path}
+            >
+              <span className="path">{f.path}</span>
+              <span className={f.decisions > 0 ? "worse" : f.decisions < 0 ? "better" : ""}>
+                {f.created ? "novo · " : f.deleted ? "removido · " : ""}
+                {signed(f.decisions)}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 

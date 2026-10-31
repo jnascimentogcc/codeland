@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 MARKER = "# codeland-live"
-TOOL_EVENTS = ("PreToolUse", "PostToolUse")
+TOOL_EVENTS = ("PreToolUse", "PostToolUse", "PostToolUseFailure")  # failure = non-zero exit
 LIFECYCLE_EVENTS = ("SessionStart", "Stop", "SessionEnd")
 
 

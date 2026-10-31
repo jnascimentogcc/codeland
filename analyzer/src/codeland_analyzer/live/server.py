@@ -9,6 +9,7 @@ from typing import Any
 from aiohttp import WSMsgType, web
 
 from codeland_analyzer.live import EVENT_SCHEMA_VERSION
+from codeland_analyzer.live.changes import ChangeTracker
 from codeland_analyzer.live.normalize import normalize
 
 log = logging.getLogger("codeland.live")
@@ -22,6 +23,7 @@ class LiveHub:
         self.events: deque[dict[str, Any]] = deque(maxlen=history)
         self.clients: set[web.WebSocketResponse] = set()
         self._seq = 0
+        self._changes = ChangeTracker(self.repo)
 
     def ingest(self, payload: dict[str, Any]) -> dict[str, Any] | None:
         normalized = normalize(payload, self.repo)
@@ -29,6 +31,7 @@ class LiveHub:
             return None
         self._seq += 1
         event = {"type": "agent-event", "seq": self._seq, "ts": time.time(), **normalized}
+        event["change"] = self._changes.track(event)
         self.events.append(event)
         return event
 

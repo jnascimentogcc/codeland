@@ -1,5 +1,5 @@
 // Pure reducer over live agent events (schema/agent-event.schema.json); no three.js here.
-import type { AgentEvent, CodelandLiveMessage } from "./agent-event";
+import type { AgentEvent, CodelandLiveMessage, FileChange, TestRun } from "./agent-event";
 
 export const CONFLICT_WINDOW_SECONDS = 120;
 
@@ -18,6 +18,10 @@ export interface AgentState {
   reads: number;
   edits: number;
   commands: number;
+  /** Verdict of the agent's latest finished test run. */
+  tests: (TestRun & { ts: number }) | null;
+  /** Files whose edits were measured: first `before` of the session, latest `after`. */
+  changes: Record<string, FileChange>;
   lastTs: number;
 }
 
@@ -78,6 +82,8 @@ export function applyEvent(state: LiveState, event: AgentEvent): LiveState {
     reads: 0,
     edits: 0,
     commands: 0,
+    tests: null,
+    changes: {},
     lastTs: event.ts,
   };
   const next: AgentState = { ...agent, lastTs: event.ts };
@@ -104,6 +110,14 @@ export function applyEvent(state: LiveState, event: AgentEvent): LiveState {
         if (event.kind === "read") next.reads += 1;
         if (event.kind === "edit") next.edits += 1;
         if (event.kind === "command") next.commands += 1;
+        if (event.tests) next.tests = { ...event.tests, ts: event.ts };
+        if (event.change && event.path) {
+          const first = next.changes[event.path];
+          next.changes = {
+            ...next.changes,
+            [event.path]: { before: first ? first.before : event.change.before, after: event.change.after },
+          };
+        }
       }
       if ((event.kind === "read" || event.kind === "edit") && event.path) {
         // An edit keeps the stronger signal over a later read of the same file by the same agent.
@@ -138,6 +152,54 @@ export function conflicts(state: LiveState, now: number): Conflict[] {
     }
   }
   return result.sort((a, b) => b.ts - a.ts);
+}
+
+/** "12 ok · 2 falhas", "testes passaram" or "testes falharam", depending on what was parsed. */
+export function describeTests(tests: TestRun): string {
+  const { passed, failed } = tests;
+  if (passed === null && failed === null) {
+    return tests.outcome === "pass" ? "testes passaram" : "testes falharam";
+  }
+  const parts: string[] = [];
+  if (passed !== null) parts.push(`${passed} ok`);
+  if (failed) parts.push(`${failed} ${failed === 1 ? "falha" : "falhas"}`);
+  return parts.join(" · ");
+}
+
+export interface ChangedFile {
+  path: string;
+  /** Lines and decisions gained (+) or removed (-); decisions are the debt signal. */
+  loc: number;
+  decisions: number;
+  created: boolean;
+  deleted: boolean;
+}
+
+export interface ChangeSummary {
+  files: ChangedFile[];
+  loc: number;
+  decisions: number;
+}
+
+/** What one agent changed, biggest decision delta first; files back at their baseline are dropped. */
+export function summarizeChanges(agent: AgentState): ChangeSummary {
+  const files: ChangedFile[] = [];
+  for (const [path, { before, after }] of Object.entries(agent.changes)) {
+    const file = {
+      path,
+      loc: (after?.loc ?? 0) - (before?.loc ?? 0),
+      decisions: (after?.decisions ?? 0) - (before?.decisions ?? 0),
+      created: before === null,
+      deleted: after === null,
+    };
+    if (file.loc !== 0 || file.decisions !== 0 || file.created || file.deleted) files.push(file);
+  }
+  files.sort((a, b) => Math.abs(b.decisions) - Math.abs(a.decisions) || a.path.localeCompare(b.path));
+  return {
+    files,
+    loc: files.reduce((sum, f) => sum + f.loc, 0),
+    decisions: files.reduce((sum, f) => sum + f.decisions, 0),
+  };
 }
 
 export function visibleAgents(state: LiveState): AgentState[] {

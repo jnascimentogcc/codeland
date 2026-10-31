@@ -1,7 +1,8 @@
 """Claude Code hook payload -> agent event (schema/agent-event.schema.json), minus seq and ts.
 
 Only routing information survives: file contents, edit strings and tool responses are dropped,
-and commands are reduced to a short label.
+and commands are reduced to a short label. The one thing read from a response is the verdict of
+a test run (pass/fail and counts).
 """
 
 import os
@@ -20,9 +21,15 @@ _TOOL_KINDS = {
     "Bash": "command",
 }
 _LIFECYCLE_KINDS = {"SessionStart": "session-start", "SessionEnd": "session-end", "Stop": "idle"}
-_TOOL_PHASES = {"PreToolUse": "start", "PostToolUse": "end"}
+_TOOL_PHASES = {"PreToolUse": "start", "PostToolUse": "end", "PostToolUseFailure": "end"}
 _DETAIL_MAX = 80
 _MSYS_DRIVE = re.compile(r"^/([a-zA-Z])(/|$)")  # Git Bash style /c/Users/...
+_TEST_COMMAND = re.compile(
+    r"\b(vitest|jest|pytest|mocha|ava|(npm|pnpm|yarn|bun)\s+(run\s+)?test|npm\s+t|go\s+test"
+    r"|cargo\s+(test|nextest)|dotnet\s+test|playwright\s+test)\b"
+)
+_PASSED = re.compile(r"(\d+)\s+passed")
+_FAILED = re.compile(r"(\d+)\s+failed")
 
 
 def normalize(payload: dict[str, Any], repo: Path) -> dict[str, Any] | None:
@@ -52,7 +59,41 @@ def normalize(payload: dict[str, Any], repo: Path) -> dict[str, Any] | None:
         detail = _short(tool_input.get("description") or tool_input.get("command"))
     elif kind == "search":
         detail = _short(tool_input.get("pattern"))
-    return _event(agent, kind, _TOOL_PHASES[hook], path=path, tool=tool, detail=detail)
+    phase = _TOOL_PHASES[hook]
+    tests = None
+    if kind == "command" and phase == "end":
+        tests = _test_outcome(payload, tool_input, failed_hook=hook == "PostToolUseFailure")
+    return _event(agent, kind, phase, path=path, tool=tool, detail=detail, tests=tests)
+
+
+def _test_outcome(
+    payload: dict[str, Any], tool_input: dict[str, Any], *, failed_hook: bool
+) -> dict[str, Any] | None:
+    """Pass/fail and counts of a finished test command; the output itself is never forwarded."""
+    command = tool_input.get("command")
+    if not isinstance(command, str) or not _TEST_COMMAND.search(command):
+        return None
+    output = _output_text(payload.get("tool_response")) + "\n" + _output_text(payload.get("error"))
+    passed = _last_count(_PASSED, output)
+    failed = _last_count(_FAILED, output)
+    outcome = "fail" if failed_hook or failed else "pass"
+    return {"outcome": outcome, "passed": passed, "failed": failed}
+
+
+def _output_text(value: object) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        return "\n".join(
+            v for k in ("stdout", "stderr", "output") if isinstance(v := value.get(k), str)
+        )
+    return ""
+
+
+def _last_count(pattern: re.Pattern[str], text: str) -> int | None:
+    # Summaries come last (vitest prints "Test Files" before "Tests"), so the last match wins.
+    matches = pattern.findall(text)
+    return int(matches[-1]) if matches else None
 
 
 def repo_relative(target: str, repo: Path, cwd: str | None = None) -> str | None:
@@ -85,6 +126,7 @@ def _event(
     path: str | None = None,
     tool: str | None = None,
     detail: str | None = None,
+    tests: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
         "agent": agent,
@@ -93,4 +135,5 @@ def _event(
         "path": path,
         "tool": tool,
         "detail": detail,
+        "tests": tests,
     }

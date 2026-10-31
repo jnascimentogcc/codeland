@@ -32,10 +32,27 @@ def simulate(
         )
         urllib.request.urlopen(request, timeout=2).close()
 
-    def tool(session: str, name: str, tool_input: dict[str, Any]) -> None:
+    def tool(session: str, name: str, tool_input: dict[str, Any], *, fails: bool = False) -> None:
         send(session, "PreToolUse", tool_name=name, tool_input=tool_input)
         time.sleep(delay / 2)
-        send(session, "PostToolUse", tool_name=name, tool_input=tool_input, tool_response={})
+        if fails:
+            output = "Tests  3 failed | 21 passed (24)"
+            send(
+                session,
+                "PostToolUseFailure",
+                tool_name=name,
+                tool_input=tool_input,
+                error=f"Exit code 1\n{output}",
+            )
+        else:
+            response = {"stdout": "Tests  24 passed (24)" if name == "Bash" else ""}
+            send(
+                session,
+                "PostToolUse",
+                tool_name=name,
+                tool_input=tool_input,
+                tool_response=response,
+            )
 
     for session in sessions:
         send(session, "SessionStart", source="startup")
@@ -51,7 +68,8 @@ def simulate(
         path = rng.choice(paths)
         roll = rng.random()
         if roll < 0.15:
-            tool(session, "Bash", {"command": "npm test", "description": "Run the test suite"})
+            command = {"command": "npm test", "description": "Run the test suite"}
+            tool(session, "Bash", command, fails=rng.random() < 0.5)
         elif roll < 0.3:
             folder = str(repo / path.rpartition("/")[0])
             tool(session, "Grep", {"pattern": "export function", "path": folder})

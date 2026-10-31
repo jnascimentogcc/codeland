@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://codeland.dev/schema/agent-event/0.1.0",
+  "$id": "https://codeland.dev/schema/agent-event/0.3.0",
   "title": "Codeland live message",
   "description": "Messages the live server (codeland-live) sends to clients over its WebSocket. Raw hook payloads are normalized server-side; file contents, diffs and command output are never forwarded.",
   "oneOf": [
@@ -15,14 +15,14 @@
       "additionalProperties": false,
       "properties": {
         "type": { "const": "snapshot" },
-        "schemaVersion": { "const": "0.1.0" },
+        "schemaVersion": { "const": "0.3.0" },
         "repository": { "type": "string", "description": "Name of the observed repository folder." },
         "events": { "type": "array", "items": { "$ref": "#/$defs/agentEvent" } }
       }
     },
     "agentEvent": {
       "type": "object",
-      "required": ["type", "seq", "ts", "agent", "kind", "phase", "path", "tool", "detail"],
+      "required": ["type", "seq", "ts", "agent", "kind", "phase", "path", "tool", "detail", "tests", "change"],
       "additionalProperties": false,
       "properties": {
         "type": { "const": "agent-event" },
@@ -33,10 +33,46 @@
           "enum": ["session-start", "session-end", "idle", "read", "edit", "search", "command", "other"],
           "description": "edit covers Write, Edit, MultiEdit and NotebookEdit; search covers Grep and Glob."
         },
-        "phase": { "enum": ["start", "end", "status"], "description": "start = PreToolUse, end = PostToolUse, status = lifecycle." },
+        "phase": { "enum": ["start", "end", "status"], "description": "start = PreToolUse, end = PostToolUse or PostToolUseFailure, status = lifecycle." },
         "path": { "type": ["string", "null"], "description": "Repository-relative target with forward slashes: a file for read/edit, a folder for search (\"\" = root); null when outside the repository or not applicable." },
         "tool": { "type": ["string", "null"] },
-        "detail": { "type": ["string", "null"], "description": "Short human label (e.g. the Bash description or a truncated command)." }
+        "detail": { "type": ["string", "null"], "description": "Short human label (e.g. the Bash description or a truncated command)." },
+        "tests": {
+          "description": "Verdict of a finished test command (vitest, jest, pytest, npm test, ...); null for every other event. Only the verdict and counts are forwarded, never the output.",
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/testRun" }]
+        },
+        "change": {
+          "description": "Effect of a finished edit of a TypeScript file, measured on disk: metrics before the agent's first edit of that file and now. Null for every other event.",
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/fileChange" }]
+        }
+      }
+    },
+    "fileChange": {
+      "type": "object",
+      "required": ["before", "after"],
+      "additionalProperties": false,
+      "properties": {
+        "before": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/fileSize" }], "description": "Null when the agent created the file." },
+        "after": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/fileSize" }], "description": "Null when the file no longer exists." }
+      }
+    },
+    "fileSize": {
+      "type": "object",
+      "required": ["loc", "decisions"],
+      "additionalProperties": false,
+      "properties": {
+        "loc": { "type": "integer", "minimum": 0 },
+        "decisions": { "type": "integer", "minimum": 0, "description": "Branching points (complexity minus one per function)." }
+      }
+    },
+    "testRun": {
+      "type": "object",
+      "required": ["outcome", "passed", "failed"],
+      "additionalProperties": false,
+      "properties": {
+        "outcome": { "enum": ["pass", "fail"], "description": "fail when the command exited non-zero or reported failed tests." },
+        "passed": { "type": ["integer", "null"], "minimum": 0, "description": "Passed tests when the summary could be parsed." },
+        "failed": { "type": ["integer", "null"], "minimum": 0, "description": "Failed tests when the summary could be parsed." }
       }
     }
   }
