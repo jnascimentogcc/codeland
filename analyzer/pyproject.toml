@@ -14,6 +14,7 @@ dependencies = [
 codeland-analyze = "codeland_analyzer.cli:main"
 codeland-live = "codeland_analyzer.live.cli:main"
 codeland-triage = "codeland_analyzer.triage_cli:main"
+codeland-sweep = "codeland_analyzer.sweep_cli:main"
 
 [dependency-groups]
 dev = [
