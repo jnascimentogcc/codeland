@@ -24,6 +24,8 @@ import {
   type Severity,
   trendSummary,
 } from "../model/findings";
+import type { Settings } from "../model/settings";
+import { SettingsPanel } from "./SettingsPanel";
 import { type BuildingShape, type CityView, hotspotRanking, type Layer } from "../model/view";
 
 const STATUS_LABEL: Record<LiveStatus, string> = {
@@ -51,9 +53,9 @@ const SEVERITY_LABEL: Record<Severity, string> = {
   info: "info",
 };
 
-const LIST_LIMIT = 40;
-
 interface Props {
+  settings: Settings;
+  onSettings: (settings: Settings) => void;
   ranked: RankedFinding[];
   filter: FindingFilter;
   onFilter: (filter: FindingFilter) => void;
@@ -76,6 +78,7 @@ interface Props {
 }
 
 export function Hud(props: Props) {
+  const [showSettings, setShowSettings] = useState(false);
   const { model, view, layer, onLayer, shape, onShape, showTests, onShowTests } = props;
   const { selectedId, onSelect } = props;
   const selected = model.buildings.find((b) => b.id === selectedId);
@@ -125,7 +128,15 @@ export function Hud(props: Props) {
             />
             Testes
           </label>
+          <button
+            className={`chip ${showSettings ? "active" : ""}`}
+            aria-expanded={showSettings}
+            onClick={() => setShowSettings(!showSettings)}
+          >
+            ajustes
+          </button>
         </div>
+        {showSettings && <SettingsPanel settings={props.settings} onChange={props.onSettings} />}
       </header>
 
       <aside className="side">
@@ -136,6 +147,7 @@ export function Hud(props: Props) {
           onFilter={props.onFilter}
           selectedId={props.selectedFindingId}
           onSelect={props.onSelectFinding}
+          limit={props.settings.listLimit}
         />
         {selectedFinding && (
           <FindingDetails
@@ -232,6 +244,7 @@ function FindingsPanel(props: {
   onFilter: (filter: FindingFilter) => void;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  limit: number;
 }) {
   const { model, ranked, filter, onFilter } = props;
   const counts = facets(model, filter);
@@ -331,7 +344,7 @@ function FindingsPanel(props: {
       )}
       {ranked.length === 0 && <p className="muted">Nenhum problema com esses filtros.</p>}
       <ol className="finding-list">
-        {ranked.slice(0, LIST_LIMIT).map(({ finding, building, priority, alsoReportedBy }) => (
+        {ranked.slice(0, props.limit).map(({ finding, building, priority, alsoReportedBy }) => (
           <li key={finding.id}>
             <button
               className={finding.id === props.selectedId ? "active" : ""}
@@ -357,9 +370,9 @@ function FindingsPanel(props: {
           </li>
         ))}
       </ol>
-      {ranked.length > LIST_LIMIT && (
+      {ranked.length > props.limit && (
         <p className="muted">
-          +{ranked.length - LIST_LIMIT} abaixo na prioridade; refine os filtros.
+          +{ranked.length - props.limit} abaixo na prioridade; refine os filtros.
         </p>
       )}
     </section>

@@ -4,6 +4,7 @@ import { conflicts as findConflicts } from "./model/agents";
 import type { CodelandCityModel } from "./model/city-model";
 import { DEFAULT_FILTER, type FindingFilter, problemsByBuilding, rankFindings } from "./model/findings";
 import { loadDefaultModel, parseModel } from "./model/load";
+import { loadSettings, saveSettings, type Settings } from "./model/settings";
 import { type BuildingShape, buildCityView, type Layer } from "./model/view";
 import { CityCanvas } from "./scene/CityCanvas";
 import { Hud } from "./ui/Hud";
@@ -17,10 +18,14 @@ export function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedFindingId, setSelectedFindingId] = useState<string | null>(null);
   const [filter, setFilter] = useState<FindingFilter>(DEFAULT_FILTER);
+  const [settings, setSettings] = useState<Settings>(loadSettings);
   const live = useLive();
   const now = useNow();
   const conflicts = useMemo(() => findConflicts(live.state, now), [live.state, now]);
-  const ranked = useMemo(() => (model ? rankFindings(model, filter) : []), [model, filter]);
+  const ranked = useMemo(
+    () => (model ? rankFindings(model, filter, settings.weights) : []),
+    [model, filter, settings.weights],
+  );
   const problems = useMemo(() => problemsByBuilding(ranked), [ranked]);
 
   useEffect(() => {
@@ -65,10 +70,31 @@ export function App() {
     };
   }, []);
 
-  const view = useMemo(
-    () => (model ? buildCityView(model, { includeTests: showTests }) : null),
-    [model, showTests],
+  const problemCounts = useMemo(
+    () =>
+      settings.height === "problems"
+        ? new Map([...problems].map(([id, p]) => [id, p.count]))
+        : undefined,
+    [settings.height, problems],
   );
+  const view = useMemo(
+    () =>
+      model
+        ? buildCityView(model, {
+            includeTests: showTests,
+            height: settings.height,
+            heightScale: settings.heightScale,
+            heightFactor: settings.heightFactor,
+            problemCounts,
+          })
+        : null,
+    [model, showTests, settings.height, settings.heightScale, settings.heightFactor, problemCounts],
+  );
+
+  const changeSettings = (next: Settings) => {
+    setSettings(next);
+    saveSettings(next);
+  };
 
   if (!model || !view) {
     return <div className="splash">{error ?? "Carregando cidade…"}</div>;
@@ -83,12 +109,15 @@ export function App() {
         shape={shape}
         live={live.state}
         problems={problems}
+        settings={settings}
         conflicts={conflicts}
         selectedId={selectedId}
         onSelect={selectBuilding}
       />
       <Hud
         ranked={ranked}
+        settings={settings}
+        onSettings={changeSettings}
         filter={filter}
         onFilter={setFilter}
         selectedFindingId={selectedFindingId}

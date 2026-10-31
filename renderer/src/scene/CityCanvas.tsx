@@ -6,6 +6,7 @@ import type { Conflict, LiveState } from "../model/agents";
 import { visibleAgents } from "../model/agents";
 import type { Edge } from "../model/city-model";
 import type { BuildingProblems } from "../model/findings";
+import type { Settings } from "../model/settings";
 import type { BuildingShape, BuildingView, CityView, Layer } from "../model/view";
 import { AgentOrbs, ConflictMarkers } from "./Agents";
 import { Buildings } from "./Buildings";
@@ -21,13 +22,15 @@ interface Props {
   shape: BuildingShape;
   live: LiveState;
   problems: ReadonlyMap<string, BuildingProblems>;
+  settings: Settings;
   conflicts: Conflict[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
 }
 
 export function CityCanvas(props: Props) {
-  const { view, edges, layer, shape, live, problems, conflicts, selectedId, onSelect } = props;
+  const { view, edges, layer, shape, live, problems, settings, conflicts } = props;
+  const { selectedId, onSelect } = props;
   const selectedIndex = selectedId === null ? null : (view.indexById.get(selectedId) ?? null);
   const focus = selectedIndex === null ? null : (view.buildings[selectedIndex] ?? null);
   const size = Math.max(view.size, 10);
@@ -41,6 +44,7 @@ export function CityCanvas(props: Props) {
     >
       <color attach="background" args={[BACKGROUND]} />
       <fog attach="fog" args={[BACKGROUND, size * 1.2, size * 4]} />
+      {settings.grid && (
       <Grid
         infiniteGrid
         position={[0, -0.01, 0]}
@@ -53,6 +57,7 @@ export function CityCanvas(props: Props) {
         fadeDistance={size * 3}
         fadeStrength={1.5}
       />
+      )}
       <Districts view={view} />
       <Buildings
         view={view}
@@ -63,12 +68,12 @@ export function CityCanvas(props: Props) {
         selectedIndex={selectedIndex}
         onSelect={(i) => onSelect(view.buildings[i]?.building.id ?? null)}
       />
-      <ImportArcs view={view} edges={edges} selectedId={selectedId} />
+      <ImportArcs view={view} edges={edges} selectedId={selectedId} mode={settings.arcs} />
       <AgentOrbs view={view} agents={visibleAgents(live)} />
       <ConflictMarkers view={view} conflicts={conflicts} />
-      <CameraRig size={size} focus={focus} />
+      <CameraRig size={size} focus={focus} orbit={settings.idleOrbit} />
       <EffectComposer multisampling={4}>
-        <Bloom mipmapBlur intensity={1.1} luminanceThreshold={0.3} luminanceSmoothing={0.25} />
+        <Bloom mipmapBlur intensity={settings.glow} luminanceThreshold={0.3} luminanceSmoothing={0.25} />
         <Noise opacity={0.025} />
         <Vignette offset={0.3} darkness={0.75} />
       </EffectComposer>
@@ -77,7 +82,8 @@ export function CityCanvas(props: Props) {
 }
 
 /** Slow orbit while idle; flies to the selected tower. */
-function CameraRig({ size, focus }: { size: number; focus: BuildingView | null }) {
+function CameraRig(props: { size: number; focus: BuildingView | null; orbit: boolean }) {
+  const { size, focus, orbit } = props;
   const ref = useRef<ComponentRef<typeof CameraControls>>(null);
   const idle = useRef(true);
 
@@ -108,7 +114,7 @@ function CameraRig({ size, focus }: { size: number; focus: BuildingView | null }
   }, [focus]);
 
   useFrame((_, delta) => {
-    if (idle.current) ref.current?.rotate(delta * 0.05, 0, false);
+    if (idle.current && orbit) ref.current?.rotate(delta * 0.05, 0, false);
   });
 
   return (

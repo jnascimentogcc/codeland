@@ -1,0 +1,264 @@
+{
+  "schemaVersion": "0.5.0",
+  "generatedAt": "2026-10-31T16:36:36+00:00",
+  "repository": {
+    "name": "brain-front",
+    "commit": "0ef515e3ccc2db06df0f2ff4e0ddcd5a64e1038e",
+    "branch": "develop"
+  },
+  "analysis": {
+    "language": "typescript",
+    "churnWindowDays": 180,
+    "coverageSource": null,
+    "findingSources": [
+      {
+        "tool": "codeland",
+        "version": null,
+        "kind": "native",
+        "file": null,
+        "findings": 0,
+        "dropped": 0
+      }
+    ],
+    "triageSource": null,
+    "trend": null
+  },
+  "districts": [
+    {
+      "id": ".",
+      "path": "",
+      "parent": null,
+      "depth": 0,
+      "layout": {
+        "x": 0.0,
+        "z": 0.0,
+        "width": 15.146,
+        "depth": 15.878
+      }
+    },
+    {
+      "id": "src",
+      "path": "src",
+      "parent": ".",
+      "depth": 1,
+      "layout": {
+        "x": 1.0,
+        "z": 1.0,
+        "width": 13.146,
+        "depth": 13.878
+      }
+    },
+    {
+      "id": "src/app",
+      "path": "src/app",
+      "parent": "src",
+      "depth": 2,
+      "layout": {
+        "x": 2.0,
+        "z": 2.0,
+        "width": 11.146,
+        "depth": 8.146
+      }
+    }
+  ],
+  "buildings": [
+    {
+      "id": "src/app/app.config.ts",
+      "path": "src/app/app.config.ts",
+      "district": "src/app",
+      "role": "source",
+      "metrics": {
+        "loc": 9,
+        "complexity": 0,
+        "decisions": 0,
+        "maxFunctionComplexity": 0,
+        "functions": 0,
+        "imports": 3,
+        "externalImports": 2,
+        "churnCommits": 0,
+        "churnLines": 0,
+        "coverage": null,
+        "hotspot": 0.0
+      },
+      "layout": {
+        "x": 3.0,
+        "z": 3.0,
+        "width": 2.732,
+        "depth": 2.732
+      }
+    },
+    {
+      "id": "src/app/app.routes.ts",
+      "path": "src/app/app.routes.ts",
+      "district": "src/app",
+      "role": "source",
+      "metrics": {
+        "loc": 2,
+        "complexity": 0,
+        "decisions": 0,
+        "maxFunctionComplexity": 0,
+        "functions": 0,
+        "imports": 1,
+        "externalImports": 1,
+        "churnCommits": 0,
+        "churnLines": 0,
+        "coverage": null,
+        "hotspot": 0.0
+      },
+      "layout": {
+        "x": 6.732,
+        "z": 3.0,
+        "width": 2.0,
+        "depth": 2.0
+      }
+    },
+    {
+      "id": "src/app/app.spec.ts",
+      "path": "src/app/app.spec.ts",
+      "district": "src/app",
+      "role": "test",
+      "metrics": {
+        "loc": 20,
+        "complexity": 4,
+        "decisions": 0,
+        "maxFunctionComplexity": 1,
+        "functions": 4,
+        "imports": 2,
+        "externalImports": 1,
+        "churnCommits": 0,
+        "churnLines": 0,
+        "coverage": null,
+        "hotspot": 0.0
+      },
+      "layout": {
+        "x": 9.732,
+        "z": 3.0,
+        "width": 2.414,
+        "depth": 2.414
+      }
+    },
+    {
+      "id": "src/app/app.ts",
+      "path": "src/app/app.ts",
+      "district": "src/app",
+      "role": "source",
+      "metrics": {
+        "loc": 11,
+        "complexity": 0,
+        "decisions": 0,
+        "maxFunctionComplexity": 0,
+        "functions": 0,
+        "imports": 2,
+        "externalImports": 2,
+        "churnCommits": 0,
+        "churnLines": 0,
+        "coverage": null,
+        "hotspot": 0.0
+      },
+      "layout": {
+        "x": 3.0,
+        "z": 6.732,
+        "width": 2.414,
+        "depth": 2.414
+      }
+    },
+    {
+      "id": "src/app/cancellation-policy.ts",
+      "path": "src/app/cancellation-policy.ts",
+      "district": "src/app",
+      "role": "source",
+      "metrics": {
+        "loc": 4,
+        "complexity": 1,
+        "decisions": 0,
+        "maxFunctionComplexity": 1,
+        "functions": 1,
+        "imports": 0,
+        "externalImports": 0,
+        "churnCommits": 2,
+        "churnLines": 8,
+        "coverage": null,
+        "hotspot": 0.0
+      },
+      "layout": {
+        "x": 6.414,
+        "z": 6.732,
+        "width": 1.0,
+        "depth": 1.0
+      }
+    },
+    {
+      "id": "src/app/refund-policy.ts",
+      "path": "src/app/refund-policy.ts",
+      "district": "src/app",
+      "role": "source",
+      "metrics": {
+        "loc": 7,
+        "complexity": 3,
+        "decisions": 2,
+        "maxFunctionComplexity": 3,
+        "functions": 1,
+        "imports": 0,
+        "externalImports": 0,
+        "churnCommits": 1,
+        "churnLines": 10,
+        "coverage": null,
+        "hotspot": 0.5
+      },
+      "layout": {
+        "x": 8.414,
+        "z": 6.732,
+        "width": 1.0,
+        "depth": 1.0
+      }
+    },
+    {
+      "id": "src/main.ts",
+      "path": "src/main.ts",
+      "district": "src",
+      "role": "source",
+      "metrics": {
+        "loc": 5,
+        "complexity": 1,
+        "decisions": 0,
+        "maxFunctionComplexity": 1,
+        "functions": 1,
+        "imports": 3,
+        "externalImports": 1,
+        "churnCommits": 0,
+        "churnLines": 0,
+        "coverage": null,
+        "hotspot": 0.0
+      },
+      "layout": {
+        "x": 2.0,
+        "z": 11.146,
+        "width": 2.732,
+        "depth": 2.732
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "src/app/app.config.ts",
+      "to": "src/app/app.routes.ts",
+      "kind": "import"
+    },
+    {
+      "from": "src/app/app.spec.ts",
+      "to": "src/app/app.ts",
+      "kind": "import"
+    },
+    {
+      "from": "src/main.ts",
+      "to": "src/app/app.config.ts",
+      "kind": "import"
+    },
+    {
+      "from": "src/main.ts",
+      "to": "src/app/app.ts",
+      "kind": "import"
+    }
+  ],
+  "findings": []
+}

@@ -73,6 +73,18 @@ describe("priority", () => {
     expect(priorityOf(same, hot, 10)).toBeGreaterThan(priorityOf(same, calm, 10) * 3);
   });
 
+  it("follows the configured weights", () => {
+    const [, hot] = MODEL.buildings as [Building, Building];
+    const same = finding("x", "any.ts", "medium");
+    const flat = { hotspot: 0, churn: 0, uncovered: 0, testFiles: 1, corroboration: 0 };
+    expect(priorityOf(same, hot, 10, flat)).toBe(3); // the file no longer matters
+    const heavy = { ...flat, hotspot: 4 };
+    expect(priorityOf(same, hot, 10, heavy)).toBe(3 * (1 + 4 * hot.metrics.hotspot));
+    const halved = { ...flat, testFiles: 0.5 };
+    const test = { ...hot, role: "test" as const };
+    expect(priorityOf(same, test, 10, halved)).toBe(1.5);
+  });
+
   it("ranks by priority, so a medium in a hotspot can beat a high in calm code", () => {
     const ranked = rankFindings(MODEL, DEFAULT_FILTER);
     expect(ranked.map((r) => r.finding.id)).toEqual(["b", "c", "a"]);

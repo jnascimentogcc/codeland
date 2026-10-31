@@ -63,6 +63,36 @@ describe("buildCityView", () => {
     expect(a!.base).toBeCloseTo(2 * PLATE_THICKNESS); // depth-1 plate on top of the root plate
   });
 
+  it("reads the height from the chosen metric, scale and factor", () => {
+    const withMetrics = (values: [number, number, number]): typeof MODEL => ({
+      ...MODEL,
+      buildings: MODEL.buildings.map((b, i) => ({
+        ...b,
+        metrics: { ...b.metrics, decisions: values[i]!, churnCommits: values[i]! },
+      })),
+    });
+    const heights = (view: ReturnType<typeof buildCityView>) =>
+      view.buildings.map((b) => (b.height - MIN_HEIGHT) / view.maxHeight);
+
+    const byDecisions = buildCityView(withMetrics([10, 5, 0]), { height: "decisions" });
+    expect(heights(byDecisions)[0]).toBeCloseTo(1);
+    expect(heights(byDecisions)[1]).toBeCloseTo(0.5);
+    const byChurn = buildCityView(withMetrics([2, 4, 1]), { height: "churn" });
+    expect(heights(byChurn)[1]).toBeCloseTo(1);
+
+    const sqrt = buildCityView(MODEL, { heightScale: "sqrt" });
+    expect(heights(sqrt)[1]).toBeCloseTo(Math.sqrt(0.5));
+
+    const doubled = buildCityView(MODEL, { heightFactor: 2 });
+    expect(doubled.maxHeight).toBeCloseTo(buildCityView(MODEL).maxHeight * 2);
+
+    const counts = new Map([["src/a.ts", 3], ["src/a.test.ts", 1]]);
+    const byProblems = buildCityView(MODEL, { height: "problems", problemCounts: counts });
+    expect(heights(byProblems)[0]).toBeCloseTo(1);
+    expect(heights(byProblems)[1]).toBeCloseTo(1 / 3);
+    expect(heights(byProblems)[2]).toBeCloseTo(0); // no problems: a flat lot
+  });
+
   it("hides tests without rescaling the rest of the city", () => {
     const all = buildCityView(MODEL);
     const sources = buildCityView(MODEL, { includeTests: false });

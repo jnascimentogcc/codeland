@@ -1,5 +1,6 @@
 // Pure findings logic: priority, filters, summaries (no three.js). See docs section 6.
 import type { Building, CodelandCityModel, Finding, Trend } from "./city-model";
+import { DEFAULT_WEIGHTS, type PriorityWeights } from "./settings";
 
 export type Severity = Finding["severity"];
 export type Category = Finding["category"];
@@ -68,18 +69,23 @@ export interface RankedFinding {
  * churn: a problem in code that changes every week costs more), times how little a test covers it.
  * Computed here and never stored, so the weights can change without re-analysis.
  */
-export function priorityOf(finding: Finding, building: Building | null, maxChurn: number): number {
+export function priorityOf(
+  finding: Finding,
+  building: Building | null,
+  maxChurn: number,
+  weights: PriorityWeights = DEFAULT_WEIGHTS,
+): number {
   const weight = SEVERITY_WEIGHT[finding.severity];
   if (!building) return weight;
   const m = building.metrics;
   const churn = maxChurn > 0 ? m.churnCommits / maxChurn : 0;
   const uncovered = m.coverage === null ? 0 : 1 - m.coverage;
-  const importance = 1 + 2 * m.hotspot + churn;
-  return weight * importance * (1 + 0.5 * uncovered) * (building.role === "test" ? 0.5 : 1);
+  const importance = 1 + weights.hotspot * m.hotspot + weights.churn * churn;
+  const testFactor = building.role === "test" ? weights.testFiles : 1;
+  return weight * importance * (1 + weights.uncovered * uncovered) * testFactor;
 }
 
-/** Each extra tool that reports the same problem raises confidence, up to two. */
-const CORROBORATION = 0.25;
+/** Extra tools that report the same problem count up to this many times. */
 const CORROBORATION_MAX = 2;
 
 /** Set aside by the scanner or by a human decision. */
@@ -122,7 +128,11 @@ export function matches(
 }
 
 /** Findings that pass the filter, highest priority first (ties: severity, then path and line). */
-export function rankFindings(model: CodelandCityModel, filter: FindingFilter): RankedFinding[] {
+export function rankFindings(
+  model: CodelandCityModel,
+  filter: FindingFilter,
+  weights: PriorityWeights = DEFAULT_WEIGHTS,
+): RankedFinding[] {
   const byPath = new Map(model.buildings.map((b) => [b.path, b]));
   const maxChurn = model.buildings.reduce((max, b) => Math.max(max, b.metrics.churnCommits), 0);
   const since = model.analysis.trend?.since ?? null;
@@ -132,12 +142,13 @@ export function rankFindings(model: CodelandCityModel, filter: FindingFilter): R
     .map((finding) => {
       const building = byPath.get(finding.location.path) ?? null;
       const alsoReportedBy = repeats.get(finding.id) ?? [];
-      const corroboration = 1 + CORROBORATION * Math.min(alsoReportedBy.length, CORROBORATION_MAX);
+      const extra = Math.min(alsoReportedBy.length, CORROBORATION_MAX);
+      const corroboration = 1 + weights.corroboration * extra;
       return {
         finding,
         building,
         alsoReportedBy,
-        priority: priorityOf(finding, building, maxChurn) * corroboration,
+        priority: priorityOf(finding, building, maxChurn, weights) * corroboration,
       };
     })
     .sort(

@@ -3,6 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import { type ComponentRef, useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { Edge } from "../model/city-model";
+import type { ArcMode } from "../model/settings";
 import type { CityView } from "../model/view";
 
 const OUTGOING = new THREE.Color(0.2, 0.95, 1).multiplyScalar(2.2);
@@ -25,10 +26,12 @@ export function ImportArcs({
   view,
   edges,
   selectedId,
+  mode = "auto",
 }: {
   view: CityView;
   edges: Edge[];
   selectedId: string | null;
+  mode?: ArcMode;
 }) {
   const arcs = useMemo(() => {
     const result: Arc[] = [];
@@ -47,7 +50,10 @@ export function ImportArcs({
 
   const shown = selectedId
     ? arcs.filter((a) => a.edge.from === selectedId || a.edge.to === selectedId)
-    : arcs;
+    : mode === "auto"
+      ? arcs
+      : [];
+  if (mode === "off") return null;
 
   return (
     <group>

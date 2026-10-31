@@ -239,6 +239,12 @@ Codeland turns what it already measures into maintainability findings, with `sou
 * **Layer "Problems":** tower colour follows the highest-priority open finding (category colour or severity ramp, switchable); count or beam intensity shows how many; the existing debt and structure layers stay.
 * **Side panel (2D):** counts by category and severity, filters, and a list ordered by priority; clicking an item flies to the tower and opens the finding. Implemented in step B: the tower colour is the worst visible finding on the heat ramp (info cyan to critical magenta-red), clean towers go dim, filters are category chips, a minimum-severity chip, suppressed toggle and text search, the list shows the top 40 by priority, and clicking a finding flies to its tower and opens a detail card. Priority = severity weight (10/6/3/1.5/0.5) x (1 + 2 x hotspot + churn / max churn) x (1 + 0.5 x uncovered share), halved for test files; findings in files that are not buildings use the plain severity weight. The live agent connection is off unless the page is opened with `?live=1` (or `?live=<ws url>`), and the Agents layer only appears then. Triage (accept / ignore / resolved) is stored in a sidecar file keyed by finding `id`, designed in after the first working version.
 
+### 6.5.1 View settings
+The "ajustes" button of the header opens a panel with what changes how the city looks or how problems are ranked. Everything applies instantly, is **client-only** (never part of the city model, so no re-analysis and no schema change) and is kept in the browser's `localStorage` (`codeland.settings.v1`; corrupt, missing or blocked storage falls back to the defaults and the page still works). `model/settings.ts` holds the pure part (types, defaults, `parseSettings` clamping every number into its range, load/save).
+* **Tower height:** the metric (lines of code, decisions, commits, number of problems), the scale (linear or square root, which flattens the very tall towers and lifts the small ones) and an exaggeration factor. Normalized over all buildings, so hiding tests still does not rescale the city. The "problems" metric follows the active filters.
+* **Priority weights** (`findings.priorityOf`): hotspot, churn, lack of coverage, test-file factor and the multi-tool bonus. The defaults reproduce the formula of 6.5 exactly. Plus how many findings the list shows (10, 20, 40, 100).
+* **Scene:** import arcs (all and faint, only the selection's, hidden), glow (bloom) intensity, idle orbit and the grid.
+
 ### 6.6 Revised plan
 
 | Step | Scope |

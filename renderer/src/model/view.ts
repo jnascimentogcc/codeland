@@ -1,5 +1,6 @@
 // Pure mapping from the city model to world-space values for the scene (no three.js here).
 import type { Building, CodelandCityModel, District } from "./city-model";
+import type { HeightMetric, HeightScale } from "./settings";
 
 export type Layer = "structure" | "debt" | "agents" | "problems";
 export type BuildingShape = "rings" | "prism";
@@ -51,9 +52,44 @@ export function moduleHue(index: number): number {
   return (index * 0.618034 + 0.52) % 1;
 }
 
+export interface ViewOptions {
+  includeTests?: boolean;
+  /** What the tower height shows (default: lines of code). */
+  height?: HeightMetric;
+  heightScale?: HeightScale;
+  /** Multiplies the tallest tower (default 1). */
+  heightFactor?: number;
+  /** Findings per building id, for the "problems" height; buildings without an entry have 0. */
+  problemCounts?: ReadonlyMap<string, number>;
+}
+
+/** The raw value a height metric reads from a building. */
+export function heightValue(
+  building: Building,
+  metric: HeightMetric,
+  problemCounts?: ReadonlyMap<string, number>,
+): number {
+  switch (metric) {
+    case "decisions":
+      return building.metrics.decisions;
+    case "churn":
+      return building.metrics.churnCommits;
+    case "problems":
+      return problemCounts?.get(building.id) ?? 0;
+    default:
+      return building.metrics.loc;
+  }
+}
+
 export function buildCityView(
   model: CodelandCityModel,
-  { includeTests = true }: { includeTests?: boolean } = {},
+  {
+    includeTests = true,
+    height = "loc",
+    heightScale = "linear",
+    heightFactor = 1,
+    problemCounts,
+  }: ViewOptions = {},
 ): CityView {
   const root = model.districts.find((d) => d.parent === null)?.layout ?? {
     x: 0,
@@ -64,9 +100,16 @@ export function buildCityView(
   const centerX = root.x + root.width / 2;
   const centerZ = root.z + root.depth / 2;
   const size = Math.max(root.width, root.depth);
-  const maxHeight = Math.min(Math.max(size * 0.35, 6), 60);
+  const maxHeight = Math.min(Math.max(size * 0.35, 6), 60) * heightFactor;
   // Normalize over all buildings so hiding tests does not rescale the city.
-  const maxLoc = model.buildings.reduce((max, b) => Math.max(max, b.metrics.loc), 1);
+  const maxValue = model.buildings.reduce(
+    (max, b) => Math.max(max, heightValue(b, height, problemCounts)),
+    1,
+  );
+  const share = (building: Building): number => {
+    const ratio = heightValue(building, height, problemCounts) / maxValue;
+    return heightScale === "sqrt" ? Math.sqrt(ratio) : ratio;
+  };
 
   const moduleNames = [...new Set(model.buildings.map((b) => topModule(b.path)))].sort();
   const hueByModule = new Map(moduleNames.map((name, i) => [name, moduleHue(i)]));
@@ -84,14 +127,14 @@ export function buildCityView(
   const buildings = model.buildings
     .filter((b) => includeTests || b.role === "source")
     .map((building) => {
-      const { layout, metrics } = building;
+      const { layout } = building;
       return {
         building,
         x: layout.x + layout.width / 2 - centerX,
         z: layout.z + layout.depth / 2 - centerZ,
         base: (elevationById.get(building.district) ?? 0) + PLATE_THICKNESS,
         radius: Math.min(layout.width, layout.depth) / 2,
-        height: MIN_HEIGHT + (metrics.loc / maxLoc) * maxHeight,
+        height: MIN_HEIGHT + share(building) * maxHeight,
         moduleHue: hueByModule.get(topModule(building.path)) ?? 0,
       };
     });
