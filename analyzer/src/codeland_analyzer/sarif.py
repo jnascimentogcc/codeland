@@ -26,6 +26,9 @@ _TAG_CATEGORIES = (  # first match wins, so security outranks the rest
     ("test", "testing"),
 )
 _TOOL_CATEGORIES = {"gitleaks": "security", "trufflehog": "security", "eslint": "maintainability"}
+CATEGORY_IDS = {c for _, c in _TAG_CATEGORIES} | {"other"}
+KIND_PROPERTY = "codeland/kind"  # tool.driver.properties; "agent" marks a sweep agent (docs 6.8)
+FINGERPRINT_KEY = "codeland/finding/v1"  # result.fingerprints: the id an agent chooses itself
 _WHITESPACE = re.compile(r"\s+")
 _WINDOWS_DRIVE = re.compile(r"^/[A-Za-z]:")
 
@@ -65,6 +68,7 @@ def _read_run(
     driver = (run.get("tool") or {}).get("driver") or {}
     tool = str(driver.get("name") or "unknown")
     version = driver.get("semanticVersion") or driver.get("version")
+    kind = "agent" if (driver.get("properties") or {}).get(KIND_PROPERTY) == "agent" else "scanner"
     rules = _collect_rules(run)
     bases = {
         name: (value or {}).get("uri")
@@ -99,14 +103,14 @@ def _read_run(
                 "severity": _severity(item, rule, severity_score, category),
                 "message": _message(item),
                 "location": location,
-                "source": {"tool": tool, "version": _text(version), "kind": "scanner"},
+                "source": {"tool": tool, "version": _text(version), "kind": kind},
                 "status": "suppressed" if _suppressed(item) else "open",
             }
         )
     source = {
         "tool": tool,
         "version": _text(version),
-        "kind": "scanner",
+        "kind": kind,
         "file": file.name,
         "findings": len(findings),
         "dropped": dropped,
@@ -196,6 +200,9 @@ def _category(
         if any(needle in tag for tag in tags):
             return category
     lowered = rule_id.lower()
+    parts = lowered.split("/")
+    if parts[0] == "agent" and len(parts) > 2 and parts[1] in CATEGORY_IDS:  # agent/<category>/x
+        return parts[1]
     if lowered.startswith(("cve-", "ghsa-")):
         return "dependencies"
     if lowered.startswith("security/"):  # eslint-plugin-security
@@ -209,7 +216,7 @@ def _fingerprint(item: dict[str, Any], tool: str, rule_id: str, path: str) -> st
     # Semgrep OSS fills the placeholder "requires login", identical for every result.
     prints = {k: v for k, v in prints.items() if isinstance(v, str) and v and " " not in v}
     if prints:
-        key, value = sorted(prints.items())[0]
+        key, value = min(prints.items(), key=lambda kv: (kv[0] != FINGERPRINT_KEY, kv[0]))
         basis = f"{key}={value}"
     else:
         region = ((item.get("locations") or [{}])[0].get("physicalLocation") or {}).get("region")

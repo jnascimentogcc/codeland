@@ -408,6 +408,7 @@ function FindingDetails(props: {
           <dd>
             {source.tool}
             {source.version && ` ${source.version}`}
+            {source.kind === "agent" && " · agente"}
           </dd>
         </div>
         <div>

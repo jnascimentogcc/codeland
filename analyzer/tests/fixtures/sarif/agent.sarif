@@ -1,0 +1,47 @@
+{
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "claude-code-sweep",
+          "semanticVersion": "claude-opus-5-5",
+          "properties": { "codeland/kind": "agent" },
+          "rules": [
+            { "id": "agent/security/command-injection", "shortDescription": { "text": "Shell command built from input" } },
+            { "id": "agent/reliability/unhandled-rejection", "shortDescription": { "text": "Promise rejection is not handled" } },
+            { "id": "agent/maintainability/dead-code", "shortDescription": { "text": "Code that nothing calls" } }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "agent/security/command-injection",
+          "level": "error",
+          "message": { "text": "The argument of exec() is concatenated from the caller's input, so a crafted value runs arbitrary commands." },
+          "fingerprints": { "codeland/finding/v1": "command-injection:run" },
+          "locations": [
+            { "physicalLocation": { "artifactLocation": { "uri": "src/main.ts" }, "region": { "startLine": 4, "endLine": 5, "snippet": { "text": "exec(\"ls \" + userInput)" } } } }
+          ]
+        },
+        {
+          "ruleId": "agent/reliability/unhandled-rejection",
+          "level": "warning",
+          "message": { "text": "save() returns a promise that is dropped." },
+          "locations": [
+            { "physicalLocation": { "artifactLocation": { "uri": "src/util.ts" }, "region": { "startLine": 1, "snippet": { "text": "save(order);" } } } }
+          ]
+        },
+        {
+          "ruleId": "agent/maintainability/dead-code",
+          "level": "note",
+          "message": { "text": "legacyFormat is exported but never imported." },
+          "fingerprints": { "codeland/finding/v1": "dead-code:legacyFormat" },
+          "locations": [
+            { "physicalLocation": { "artifactLocation": { "uri": "src/util.ts" }, "region": { "startLine": 1 } } }
+          ]
+        }
+      ]
+    }
+  ]
+}

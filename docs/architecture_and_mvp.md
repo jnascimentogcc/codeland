@@ -247,10 +247,27 @@ Codeland turns what it already measures into maintainability findings, with `sou
 | **B. Problems layer and panel** — *implemented* | Renderer layer, filters, priority ordering, click-to-fly. |
 | **C. Real scanners on bella-nina** — *implemented* | ESLint 9 (typescript-eslint, SARIF formatter) and Semgrep 1.18x (Docker; the pip build does not run on Windows) ran on bella-nina and on a copy with planted problems. bella-nina itself is clean for both (0 findings), so the planted copy is what exercised the importer. Real output exposed three things the hand-written fixtures hid: containers and CI report absolute paths outside the repo (`/src/src/a.ts`; now matched by their longest tail that is a repo file), Semgrep OSS writes the fingerprint `requires login` on every result (ignored: values with spaces), and linters report must-fix style rules as `error` (a maintainability finding from `level` alone is capped at medium). Semgrep only scans git-tracked files. |
 | **D. Trend and triage** — *implemented* | Schema v0.4.0. Trend: `--previous` now also carries `firstSeen` per finding and `analysis.trend {since, fixed[]}`; a finding is *new* when `firstSeen > since`; a previous finding is *fixed* only if its tool reported again in this run (omitting a report is not a fix). Triage: see 6.7. |
-| **E. Sweep agents** | Agents that write SARIF (security first, then others), delivered through the paused live channel if useful. |
+| **E. Sweep agents** — *contract implemented* | The minimal contract (6.8): any agent that writes SARIF in that shape is imported as `source.kind = agent`, with ids that survive re-runs. A `codeland-sweep` command that launches the agent, and delivery through the paused live channel, are not built; both sit on top of this contract. |
 
 ### 6.7 Triage
 Decisions live in a sidecar file, `codeland-triage.json` (`{version: 1, findings: {<id>: {state, note, at}}}`), kept next to the repository and committed with it, so the team shares them and they survive re-scans because ids are stable (6.3). States: `accepted` (known risk, left as is) and `false-positive`; "resolved" is not a state, it is what the trend reports when the finding disappears. `codeland-triage <file> accepted|false-positive|reopen <id>... [--note]` edits the file and `codeland-analyze --triage <file>` merges it into `finding.triage`; entries matching no finding are reported as stale and kept. The renderer is a static page that cannot write files, so the finding card shows the id and copies the command instead of editing. Triaged findings are hidden like scanner-suppressed ones (one toggle shows both) and no longer count as new.
+
+### 6.8 Sweep agent contract
+A sweep agent (security first, but any review: reliability, dependencies, tests...) is a program or a model session that reads the repository and writes a SARIF 2.1.0 file; `codeland-analyze --sarif sweep.sarif` imports it like any scanner. What makes it an *agent* report and keeps it comparable between runs:
+
+| Field | Rule |
+|---|---|
+| `tool.driver.name` / `semanticVersion` | Name of the sweep (`claude-code-sweep-security`) and the model id (`claude-sonnet-5-5`). |
+| `tool.driver.properties["codeland/kind"]` | `"agent"`. Sets `source.kind`, which the finding card shows as "agente". Absent = scanner. |
+| `rules[].id` | `agent/<category>/<slug>`, with `<category>` one of the model's categories (`security`, `reliability`, `maintainability`, `testing`, `dependencies`, `performance`, `other`); it sets `category`. Tags are used first when present. |
+| severity | `properties["security-severity"]` (CVSS 0-10) when the agent can justify a score, else `level` (`error` high, `warning` medium, `note` low). Maintainability findings from `level` alone are capped at medium. |
+| `results[].fingerprints["codeland/finding/v1"]` | **The id the agent chooses**, short and about *what* and *where* (`command-injection:run`, `hardcoded-secret:apiToken`): the same problem must get the same string in every run, whatever words the explanation uses. Without it the id falls back to rule + path + `region.snippet.text` (so give a snippet), and only then to the message, which an LLM rewrites on every run. |
+| `locations[0].physicalLocation` | Repository-relative `artifactLocation.uri` and `region.startLine`/`endLine`. A result without a location is dropped and counted. |
+| `message.text` | One or two sentences: what is wrong and why it matters; truncated at 300 characters. |
+
+Agent findings are opinions, not proofs, so they go through the same triage (6.7) as the rest. Known limit: the same flaw reported by a scanner and by an agent appears twice, with different ids, because there is no cross-tool deduplication yet (same file, overlapping lines and category would be the natural key). A sample report is `analyzer/tests/fixtures/sarif/agent.sarif`; the prompt below is enough to ask a Claude Code session for one:
+
+> Review `<repo>` for `<security | reliability | ...>` problems. Write a SARIF 2.1.0 file to `<out>.sarif`: driver name `claude-code-sweep-<kind>`, `semanticVersion` your model id, `properties` `{"codeland/kind": "agent"}`; one result per problem with `ruleId` `agent/<category>/<slug>`, `level`, a one-to-two sentence `message`, a repo-relative `uri`, `startLine`, a `region.snippet.text` and `fingerprints` `{"codeland/finding/v1": "<slug>:<symbol>"}` that you would write identically on a re-run. Report only problems you can point at; no style nits.
 
 ---
 

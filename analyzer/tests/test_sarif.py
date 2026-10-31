@@ -84,6 +84,38 @@ def test_eslint_report_ids_duplicates_and_unlocated_results(repo):
     assert imported.sources[0]["dropped"] == 1  # no location
 
 
+def test_agent_report_is_marked_as_agent_and_ids_do_not_depend_on_the_prose(repo):
+    make_sample(repo)
+    report = fixture(repo, "agent.sarif")
+    imported = read_sarif(report, repo.root)
+
+    injection, rejection, dead = imported.findings
+    assert {f["source"]["kind"] for f in imported.findings} == {"agent"}
+    assert imported.sources[0]["kind"] == "agent"
+    assert imported.findings[0]["source"]["version"] == "claude-opus-5-5"
+    # Category comes from the agent/<category>/<slug> rule id, with no tags needed.
+    assert [f["category"] for f in imported.findings] == [
+        "security",
+        "reliability",
+        "maintainability",
+    ]
+    assert (injection["severity"], rejection["severity"], dead["severity"]) == (
+        "high",
+        "medium",
+        "low",
+    )
+
+    # Rewording the explanation and moving the code keeps every id: the agent's own
+    # fingerprint, or else the snippet, identifies the finding, never the prose or the line.
+    document = json.loads(report.read_text(encoding="utf-8"))
+    for result in document["runs"][0]["results"]:
+        result["message"]["text"] = "Reworded by another run. " + result["message"]["text"]
+        result["locations"][0]["physicalLocation"]["region"]["startLine"] += 40
+    report.write_text(json.dumps(document), encoding="utf-8")
+    again = read_sarif(report, repo.root)
+    assert [f["id"] for f in again.findings] == [f["id"] for f in imported.findings]
+
+
 def test_ids_survive_code_moving_inside_the_file(repo):
     make_sample(repo)
     report = fixture(repo, "codeql.sarif")
