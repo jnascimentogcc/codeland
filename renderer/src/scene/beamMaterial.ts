@@ -25,6 +25,7 @@ export function createBeamMaterial(): THREE.ShaderMaterial {
       attribute float aAgentHue;
       attribute float aActivityAt;
       attribute float aActivityKind;
+      attribute float aProblem;
       uniform float uSelected;
       uniform float uHovered;
       varying float vHeight;
@@ -35,6 +36,7 @@ export function createBeamMaterial(): THREE.ShaderMaterial {
       varying float vAgentHue;
       varying float vActivityAt;
       varying float vActivityKind;
+      varying float vProblem;
       varying float vState;
 
       void main() {
@@ -46,6 +48,7 @@ export function createBeamMaterial(): THREE.ShaderMaterial {
         vAgentHue = aAgentHue;
         vActivityAt = aActivityAt;
         vActivityKind = aActivityKind;
+        vProblem = aProblem;
         float id = float(gl_InstanceID);
         vState = id == uSelected ? 2.0 : (id == uHovered ? 1.0 : 0.0);
         gl_Position = projectionMatrix * viewMatrix * modelMatrix * instanceMatrix * vec4(position, 1.0);
@@ -63,6 +66,7 @@ export function createBeamMaterial(): THREE.ShaderMaterial {
       varying float vAgentHue;
       varying float vActivityAt;
       varying float vActivityKind;
+      varying float vProblem;
       varying float vState;
       ${ACTIVITY_GLSL}
 
@@ -78,12 +82,15 @@ export function createBeamMaterial(): THREE.ShaderMaterial {
 
       void main() {
         bool debt = abs(uLayer - 1.0) < 0.5;
-        bool agentsLayer = uLayer > 1.5;
-        vec3 accent = debt
-          ? heatColor(vHeat)
-          : agentsLayer ? vec3(0.30, 0.45, 0.65) : hsv2rgb(vec3(vHue, 0.6, 1.0));
-        float heat = debt ? vHeat : 0.0;
-        float base = agentsLayer ? 0.12 : 0.55;
+        bool problems = uLayer > 2.5;
+        bool agentsLayer = uLayer > 1.5 && !problems;
+        bool clean = problems && vProblem <= 0.0;
+        float heat = debt ? vHeat : (problems ? vProblem : 0.0);
+        vec3 accent = debt || (problems && !clean)
+          ? heatColor(heat)
+          : (agentsLayer || clean) ? vec3(0.30, 0.45, 0.65) : hsv2rgb(vec3(vHue, 0.6, 1.0));
+        bool dim = agentsLayer || clean;
+        float base = dim ? 0.12 : 0.55;
 
         float act = vAgentHue >= 0.0 ? activity(vActivityAt, vActivityKind) : 0.0;
         accent = mix(accent, hsv2rgb(vec3(vAgentHue, 0.7, 1.0)), min(act * 2.0, 1.0));
@@ -95,7 +102,7 @@ export function createBeamMaterial(): THREE.ShaderMaterial {
         // Fade out at the very bottom and above the roof.
         float fade = smoothstep(0.0, 0.08, vLocalY) * (1.0 - smoothstep(0.92, 1.0, vLocalY));
         float strength = base + heat * 1.2 + pulse * (0.8 + heat * 1.6);
-        strength = strength * (agentsLayer ? 0.3 : 1.0) + act * (vActivityKind > 0.5 ? 4.0 : 2.2) * (0.6 + pulse);
+        strength = strength * (dim ? 0.3 : 1.0) + act * (vActivityKind > 0.5 ? 4.0 : 2.2) * (0.6 + pulse);
         strength *= fade;
         if (vTest > 0.5) strength *= 0.4;
         if (vState > 0.5) strength *= vState > 1.5 ? 2.2 : 1.5;

@@ -30,7 +30,7 @@ export function createBuildingMaterial(): THREE.ShaderMaterial {
       {
         uTime: { value: 0 },
         uNow: { value: 0 }, // seconds since LIVE_EPOCH, the clock of aActivityAt
-        uLayer: { value: 1 }, // 0 = structure, 1 = debt, 2 = agents
+        uLayer: { value: 1 }, // 0 = structure, 1 = debt, 2 = agents, 3 = problems
         uSelected: { value: -1 },
         uHovered: { value: -1 },
         uRings: { value: 1 }, // 1 = stacked rings, 0 = solid prism
@@ -46,6 +46,7 @@ export function createBuildingMaterial(): THREE.ShaderMaterial {
       attribute float aAgentHue;
       attribute float aActivityAt;
       attribute float aActivityKind;
+      attribute float aProblem;
       uniform float uSelected;
       uniform float uHovered;
       varying vec2 vUv;
@@ -62,6 +63,7 @@ export function createBuildingMaterial(): THREE.ShaderMaterial {
       varying float vAgentHue;
       varying float vActivityAt;
       varying float vActivityKind;
+      varying float vProblem;
       varying float vState;
       varying float vSeed;
       #include <fog_pars_vertex>
@@ -86,6 +88,7 @@ export function createBuildingMaterial(): THREE.ShaderMaterial {
         vAgentHue = aAgentHue;
         vActivityAt = aActivityAt;
         vActivityKind = aActivityKind;
+        vProblem = aProblem;
         float id = float(gl_InstanceID);
         vState = id == uSelected ? 2.0 : (id == uHovered ? 1.0 : 0.0);
         vSeed = fract(sin(id * 12.9898) * 43758.5453);
@@ -113,6 +116,7 @@ export function createBuildingMaterial(): THREE.ShaderMaterial {
       varying float vAgentHue;
       varying float vActivityAt;
       varying float vActivityKind;
+      varying float vProblem;
       varying float vState;
       varying float vSeed;
       #include <fog_pars_fragment>
@@ -162,11 +166,15 @@ export function createBuildingMaterial(): THREE.ShaderMaterial {
         float bands = isCap || rings ? 0.0 : 1.0 - smoothstep(0.015, 0.05, abs(floorPos - 0.5));
 
         bool debt = abs(uLayer - 1.0) < 0.5;
-        bool agentsLayer = uLayer > 1.5;
-        vec3 accent = debt
-          ? heatColor(vHeat)
-          : agentsLayer ? vec3(0.30, 0.45, 0.65) : hsv2rgb(vec3(vHue, 0.75, 1.0));
-        float intensity = agentsLayer ? 0.35 : 1.0;
+        bool problems = uLayer > 2.5;
+        bool agentsLayer = uLayer > 1.5 && !problems;
+        // Problems layer: towers with a visible finding take the severity ramp; the rest go dim.
+        bool clean = problems && vProblem <= 0.0;
+        float heat = debt ? vHeat : (problems ? vProblem : 0.0);
+        vec3 accent = debt || (problems && !clean)
+          ? heatColor(heat)
+          : (agentsLayer || clean) ? vec3(0.30, 0.45, 0.65) : hsv2rgb(vec3(vHue, 0.75, 1.0));
+        float intensity = (agentsLayer || clean) ? 0.35 : 1.0;
 
         if (agentsLayer && vAgentHue >= 0.0) {
           // Files the agents touched take the agent's colour, fading out over time.
@@ -175,19 +183,19 @@ export function createBuildingMaterial(): THREE.ShaderMaterial {
           intensity += act * (vActivityKind > 0.5 ? 2.5 : 1.2);
         }
 
-        if (debt) {
-          // Hotspots pulse, faster and stronger as the score grows.
-          intensity *= 1.0 + vHeat * 0.7 * sin(uTime * (1.2 + vHeat * 5.0) + vSeed * 6.28);
-          // Poorly covered files lose their edge lights ("switched off").
-          if (vCoverage >= 0.0) edge *= mix(0.15, 1.0, smoothstep(0.2, 0.6, vCoverage));
+        if (debt || problems) {
+          // Hotspots and severe problems pulse, faster and stronger as the value grows.
+          intensity *= 1.0 + heat * 0.7 * sin(uTime * (1.2 + heat * 5.0) + vSeed * 6.28);
         }
+        // Poorly covered files lose their edge lights ("switched off").
+        if (debt && vCoverage >= 0.0) edge *= mix(0.15, 1.0, smoothstep(0.2, 0.6, vCoverage));
         if (vTest > 0.5) {
           accent = mix(accent, vec3(0.62, 0.50, 1.0), 0.65);
           intensity *= 0.55;
         }
 
         float fresnel = pow(1.0 - max(dot(n, normalize(vViewDir)), 0.0), 3.0);
-        vec3 body = vec3(0.015, 0.03, 0.055) + accent * (0.04 + (debt ? 0.08 * vHeat : 0.0));
+        vec3 body = vec3(0.015, 0.03, 0.055) + accent * (0.04 + 0.08 * heat);
         vec3 color = body + accent * fresnel * 0.45;
         color += accent * (edge * 2.6 + bands * 0.55) * intensity;
         // Inner faces seen through the gaps stay dim, so rings read as hollow shells.

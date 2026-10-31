@@ -5,6 +5,7 @@ import { type ComponentRef, useEffect, useRef } from "react";
 import type { Conflict, LiveState } from "../model/agents";
 import { visibleAgents } from "../model/agents";
 import type { Edge } from "../model/city-model";
+import type { BuildingProblems } from "../model/findings";
 import type { BuildingShape, BuildingView, CityView, Layer } from "../model/view";
 import { AgentOrbs, ConflictMarkers } from "./Agents";
 import { Buildings } from "./Buildings";
@@ -19,13 +20,14 @@ interface Props {
   layer: Layer;
   shape: BuildingShape;
   live: LiveState;
+  problems: ReadonlyMap<string, BuildingProblems>;
   conflicts: Conflict[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
 }
 
 export function CityCanvas(props: Props) {
-  const { view, edges, layer, shape, live, conflicts, selectedId, onSelect } = props;
+  const { view, edges, layer, shape, live, problems, conflicts, selectedId, onSelect } = props;
   const selectedIndex = selectedId === null ? null : (view.indexById.get(selectedId) ?? null);
   const focus = selectedIndex === null ? null : (view.buildings[selectedIndex] ?? null);
   const size = Math.max(view.size, 10);
@@ -57,6 +59,7 @@ export function CityCanvas(props: Props) {
         layer={layer}
         shape={shape}
         live={live}
+        problems={problems}
         selectedIndex={selectedIndex}
         onSelect={(i) => onSelect(view.buildings[i]?.building.id ?? null)}
       />

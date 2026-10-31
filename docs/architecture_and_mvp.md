@@ -237,14 +237,14 @@ Codeland turns what it already measures into maintainability findings, with `sou
 
 ### 6.5 UI
 * **Layer "Problems":** tower colour follows the highest-priority open finding (category colour or severity ramp, switchable); count or beam intensity shows how many; the existing debt and structure layers stay.
-* **Side panel (2D):** counts by category and severity, filters, and a list ordered by priority; clicking an item flies to the tower and opens the finding. Triage (accept / ignore / resolved) is stored in a sidecar file keyed by finding `id`, designed in after the first working version.
+* **Side panel (2D):** counts by category and severity, filters, and a list ordered by priority; clicking an item flies to the tower and opens the finding. Implemented in step B: the tower colour is the worst visible finding on the heat ramp (info cyan to critical magenta-red), clean towers go dim, filters are category chips, a minimum-severity chip, suppressed toggle and text search, the list shows the top 40 by priority, and clicking a finding flies to its tower and opens a detail card. Priority = severity weight (10/6/3/1.5/0.5) x (1 + 2 x hotspot + churn / max churn) x (1 + 0.5 x uncovered share), halved for test files; findings in files that are not buildings use the plain severity weight. The live agent connection is off unless the page is opened with `?live=1` (or `?live=<ws url>`), and the Agents layer only appears then. Triage (accept / ignore / resolved) is stored in a sidecar file keyed by finding `id`, designed in after the first working version.
 
 ### 6.6 Revised plan
 
 | Step | Scope |
 |---|---|
 | **A. Findings in the model** — *implemented* | Schema v0.3.0, SARIF importer, native findings, tests with real SARIF samples. |
-| **B. Problems layer and panel** | Renderer layer, filters, priority ordering, click-to-fly. |
+| **B. Problems layer and panel** — *implemented* | Renderer layer, filters, priority ordering, click-to-fly. |
 | **C. Real scanners on bella-nina** | Run Semgrep/ESLint to produce SARIF and check the ranking against what the team expects. |
 | **D. Trend and triage** | Compare scans by `id` (new / fixed), sidecar triage file. |
 | **E. Sweep agents** | Agents that write SARIF (security first, then others), delivered through the paused live channel if useful. |

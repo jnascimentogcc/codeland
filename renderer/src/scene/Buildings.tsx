@@ -3,6 +3,7 @@ import { type ThreeEvent, useFrame } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { LiveState } from "../model/agents";
+import type { BuildingProblems } from "../model/findings";
 import type { BuildingShape, CityView, Layer } from "../model/view";
 import { createBeamMaterial } from "./beamMaterial";
 import { createBuildingMaterial, LIVE_EPOCH, NO_ACTIVITY } from "./buildingMaterial";
@@ -12,11 +13,13 @@ interface Props {
   layer: Layer;
   shape: BuildingShape;
   live: LiveState;
+  /** Visible findings per building id, for the problems layer. */
+  problems: ReadonlyMap<string, BuildingProblems>;
   selectedIndex: number | null;
   onSelect: (index: number) => void;
 }
 
-const LAYER_UNIFORM: Record<Layer, number> = { structure: 0, debt: 1, agents: 2 };
+const LAYER_UNIFORM: Record<Layer, number> = { structure: 0, debt: 1, agents: 2, problems: 3 };
 
 const BEAM_RADIUS = 0.24; // relative to the tower radius
 const BEAM_OVERSHOOT = 0.8; // world units the beam rises above the roof
@@ -25,7 +28,15 @@ const BEAM_OVERSHOOT = 0.8; // world units the beam rises above the roof
  * All towers in one instanced draw call, plus (ring shape) one instanced draw call for the
  * light beams through their cores. Instance i of both meshes is building i.
  */
-export function Buildings({ view, layer, shape, live, selectedIndex, onSelect }: Props) {
+export function Buildings({
+  view,
+  layer,
+  shape,
+  live,
+  problems,
+  selectedIndex,
+  onSelect,
+}: Props) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const beamsRef = useRef<THREE.InstancedMesh>(null);
   const [hovered, setHovered] = useState<number | null>(null);
@@ -43,6 +54,8 @@ export function Buildings({ view, layer, shape, live, selectedIndex, onSelect }:
     const agentHue = attribute(() => -1);
     const activityAt = attribute(() => NO_ACTIVITY);
     const activityKind = attribute(() => 0);
+    // Heat-ramp position of the file's worst visible finding, 0 = none.
+    const problem = attribute(() => 0);
 
     // Hexagonal prism with a slight taper; unit height with its base at y = 0.
     const tower = new THREE.CylinderGeometry(0.84, 1, 1, 6, 1);
@@ -57,6 +70,7 @@ export function Buildings({ view, layer, shape, live, selectedIndex, onSelect }:
       geo.setAttribute("aAgentHue", agentHue);
       geo.setAttribute("aActivityAt", activityAt);
       geo.setAttribute("aActivityKind", activityKind);
+      geo.setAttribute("aProblem", problem);
     }
     return [tower, beam];
   }, [view]);
@@ -74,6 +88,12 @@ export function Buildings({ view, layer, shape, live, selectedIndex, onSelect }:
     });
     for (const attribute of [hues, at, kind]) attribute.needsUpdate = true;
   }, [view, geometry, live.activity, live.agents]);
+
+  useEffect(() => {
+    const attribute = geometry.getAttribute("aProblem") as THREE.InstancedBufferAttribute;
+    view.buildings.forEach((b, i) => attribute.setX(i, problems.get(b.building.id)?.heat ?? 0));
+    attribute.needsUpdate = true;
+  }, [view, geometry, problems]);
 
   useEffect(
     () => () => {
@@ -168,6 +188,8 @@ export function Buildings({ view, layer, shape, live, selectedIndex, onSelect }:
             <div className="tooltip-meta">
               hotspot {hoveredView.building.metrics.hotspot.toFixed(2)} ·{" "}
               {hoveredView.building.metrics.loc} linhas
+              {problems.has(hoveredView.building.id) &&
+                ` · ${problems.get(hoveredView.building.id)!.count} problemas`}
             </div>
           </div>
         </Html>

@@ -8,7 +8,17 @@ import {
   summarizeChanges,
   visibleAgents,
 } from "../model/agents";
-import type { Building, CodelandCityModel } from "../model/city-model";
+import type { Building, CodelandCityModel, Finding } from "../model/city-model";
+import {
+  CATEGORIES,
+  type Category,
+  facets,
+  type FindingFilter,
+  formatLocation,
+  type RankedFinding,
+  SEVERITIES,
+  type Severity,
+} from "../model/findings";
 import { type BuildingShape, type CityView, hotspotRanking, type Layer } from "../model/view";
 
 const STATUS_LABEL: Record<LiveStatus, string> = {
@@ -18,7 +28,32 @@ const STATUS_LABEL: Record<LiveStatus, string> = {
   offline: "sem servidor",
 };
 
+const CATEGORY_LABEL: Record<Category, string> = {
+  security: "segurança",
+  reliability: "confiabilidade",
+  maintainability: "manutenibilidade",
+  testing: "testes",
+  dependencies: "dependências",
+  performance: "desempenho",
+  other: "outros",
+};
+
+const SEVERITY_LABEL: Record<Severity, string> = {
+  critical: "crítica",
+  high: "alta",
+  medium: "média",
+  low: "baixa",
+  info: "info",
+};
+
+const LIST_LIMIT = 40;
+
 interface Props {
+  ranked: RankedFinding[];
+  filter: FindingFilter;
+  onFilter: (filter: FindingFilter) => void;
+  selectedFindingId: string | null;
+  onSelectFinding: (id: string | null) => void;
   live: LiveState;
   liveStatus: LiveStatus;
   conflicts: Conflict[];
@@ -39,6 +74,7 @@ export function Hud(props: Props) {
   const { model, view, layer, onLayer, shape, onShape, showTests, onShowTests } = props;
   const { selectedId, onSelect } = props;
   const selected = model.buildings.find((b) => b.id === selectedId);
+  const selectedFinding = model.findings.find((f) => f.id === props.selectedFindingId);
   const hotspots = hotspotRanking(model, 10);
   const { repository } = model;
 
@@ -61,9 +97,10 @@ export function Hud(props: Props) {
             value={layer}
             onChange={onLayer}
             options={[
-              ["structure", "Estrutura"],
+              ["problems", "Problemas"],
               ["debt", "Dívida"],
-              ["agents", "Agentes"],
+              ["structure", "Estrutura"],
+              ...(props.liveStatus === "off" ? [] : [["agents", "Agentes"] as [Layer, string]]),
             ]}
           />
           <Segmented
@@ -87,6 +124,17 @@ export function Hud(props: Props) {
       </header>
 
       <aside className="side">
+        <FindingsPanel
+          model={model}
+          ranked={props.ranked}
+          filter={props.filter}
+          onFilter={props.onFilter}
+          selectedId={props.selectedFindingId}
+          onSelect={props.onSelectFinding}
+        />
+        {selectedFinding && (
+          <FindingDetails finding={selectedFinding} onClose={() => props.onSelectFinding(null)} />
+        )}
         {selected && <Details building={selected} onClose={() => onSelect(null)} />}
         <AgentsPanel
           live={props.live}
@@ -117,7 +165,19 @@ export function Hud(props: Props) {
       </aside>
 
       <footer className="panel legend">
-        {layer === "agents" ? (
+        {layer === "problems" ? (
+          <>
+            <div className="gradient" />
+            <div className="legend-scale">
+              <span>nenhum / info</span>
+              <span>crítica</span>
+            </div>
+            <div className="muted">
+              Cor = problema mais grave do arquivo (após os filtros) · torre apagada = sem problemas
+              · a lista ao lado ordena por prioridade
+            </div>
+          </>
+        ) : layer === "agents" ? (
           <div className="muted">
             Prédio e feixe acendem na cor do agente que leu (fraco) ou editou (forte) o arquivo e
             apagam com o tempo · anel vermelho = dois agentes editando o mesmo arquivo
@@ -151,6 +211,145 @@ export function Hud(props: Props) {
 
       {props.error && <div className="panel error">{props.error}</div>}
     </div>
+  );
+}
+
+function FindingsPanel(props: {
+  model: CodelandCityModel;
+  ranked: RankedFinding[];
+  filter: FindingFilter;
+  onFilter: (filter: FindingFilter) => void;
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+}) {
+  const { model, ranked, filter, onFilter } = props;
+  const counts = facets(model, filter);
+  const suppressed = model.findings.filter((f) => f.status === "suppressed").length;
+  const toggleCategory = (category: Category) => {
+    const next = new Set(filter.categories);
+    if (!next.delete(category)) next.add(category);
+    onFilter({ ...filter, categories: next });
+  };
+
+  if (model.findings.length === 0) {
+    return (
+      <section className="panel">
+        <h2>Problemas</h2>
+        <p className="muted">
+          Nenhum problema no modelo. Importe relatórios com <code>--sarif</code> ao gerar a cidade.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="panel findings">
+      <h2>
+        Problemas <span className="live-status">{ranked.length}</span>
+      </h2>
+      <input
+        className="search"
+        type="search"
+        placeholder="Buscar arquivo, regra ou mensagem"
+        value={filter.query}
+        onChange={(e) => onFilter({ ...filter, query: e.target.value })}
+      />
+      <div className="chips">
+        {CATEGORIES.filter((c) => counts.categories[c] > 0 || filter.categories.has(c)).map((c) => (
+          <button
+            key={c}
+            className={`chip ${filter.categories.has(c) ? "active" : ""}`}
+            onClick={() => toggleCategory(c)}
+          >
+            {CATEGORY_LABEL[c]} {counts.categories[c]}
+          </button>
+        ))}
+      </div>
+      <div className="chips">
+        {SEVERITIES.filter((s) => counts.severities[s] > 0 || filter.minSeverity === s).map((s) => (
+          <button
+            key={s}
+            className={`chip sev-${s} ${filter.minSeverity === s && s !== "info" ? "active" : ""}`}
+            title="Mostrar só esta severidade e as mais graves (clique de novo para limpar)"
+            onClick={() =>
+              onFilter({ ...filter, minSeverity: filter.minSeverity === s ? "info" : s })
+            }
+          >
+            {SEVERITY_LABEL[s]} {counts.severities[s]}
+          </button>
+        ))}
+      </div>
+      {suppressed > 0 && (
+        <label className="toggle">
+          <input
+            type="checkbox"
+            checked={filter.showSuppressed}
+            onChange={(e) => onFilter({ ...filter, showSuppressed: e.target.checked })}
+          />
+          Mostrar suprimidos ({suppressed})
+        </label>
+      )}
+      {ranked.length === 0 && <p className="muted">Nenhum problema com esses filtros.</p>}
+      <ol className="finding-list">
+        {ranked.slice(0, LIST_LIMIT).map(({ finding, building, priority }) => (
+          <li key={finding.id}>
+            <button
+              className={finding.id === props.selectedId ? "active" : ""}
+              onClick={() => props.onSelect(finding.id)}
+              title={formatLocation(finding)}
+            >
+              <i className={`sev-dot sev-${finding.severity}`} />
+              <span className="finding-title">{finding.title ?? finding.ruleId}</span>
+              <span className="finding-score">{priority.toFixed(1)}</span>
+              <span className="finding-where">
+                {formatLocation(finding)}
+                {!building && " · fora da cidade"}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ol>
+      {ranked.length > LIST_LIMIT && (
+        <p className="muted">
+          +{ranked.length - LIST_LIMIT} abaixo na prioridade; refine os filtros.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function FindingDetails({ finding, onClose }: { finding: Finding; onClose: () => void }) {
+  const { source } = finding;
+  return (
+    <section className="panel details">
+      <button className="close" onClick={onClose} aria-label="Fechar">
+        ×
+      </button>
+      <h2>
+        <i className={`sev-dot sev-${finding.severity}`} /> {SEVERITY_LABEL[finding.severity]} ·{" "}
+        {CATEGORY_LABEL[finding.category]}
+        {finding.status === "suppressed" && " · suprimido"}
+      </h2>
+      <div className="details-path">{finding.title ?? finding.ruleId}</div>
+      <p className="finding-message">{finding.message}</p>
+      <dl>
+        <div>
+          <dt>Regra</dt>
+          <dd>{finding.ruleId}</dd>
+        </div>
+        <div>
+          <dt>Local</dt>
+          <dd>{formatLocation(finding)}</dd>
+        </div>
+        <div>
+          <dt>Fonte</dt>
+          <dd>
+            {source.tool}
+            {source.version && ` ${source.version}`}
+          </dd>
+        </div>
+      </dl>
+    </section>
   );
 }
 

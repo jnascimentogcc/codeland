@@ -6,17 +6,20 @@ export type LiveStatus = "off" | "connecting" | "live" | "offline";
 
 const RECONNECT_MS = 2000;
 
-/** ?live=<ws url> overrides the default ws://<host>:4317/ws; ?live=off disables. */
+/**
+ * The live agent view is paused (docs section 0): it only connects when asked, with ?live=1 for
+ * the default ws://<host>:4317/ws or ?live=<ws url>.
+ */
 function liveUrl(): string | null {
   const param = new URLSearchParams(window.location.search).get("live");
-  if (param === "off") return null;
-  return param ?? `ws://${window.location.hostname || "localhost"}:4317/ws`;
+  if (param === null || param === "off") return null;
+  return param === "" || param === "1" ? `ws://${window.location.hostname || "localhost"}:4317/ws` : param;
 }
 
 /** Connects to codeland-live and keeps the agent state; reconnects while the server is down. */
 export function useLive(): { state: LiveState; status: LiveStatus } {
   const [state, dispatch] = useReducer(applyMessage, EMPTY_LIVE_STATE);
-  const [status, setStatus] = useState<LiveStatus>("connecting");
+  const [status, setStatus] = useState<LiveStatus>(() => (liveUrl() ? "connecting" : "off"));
 
   useEffect(() => {
     const url = liveUrl();
