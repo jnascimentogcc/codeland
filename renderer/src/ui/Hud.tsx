@@ -13,6 +13,7 @@ import type { Building, CodelandCityModel, Finding } from "../model/city-model";
 import {
   CATEGORIES,
   type Category,
+  duplicatesByPrimary,
   facets,
   type FindingFilter,
   formatLocation,
@@ -139,6 +140,7 @@ export function Hud(props: Props) {
         {selectedFinding && (
           <FindingDetails
             finding={selectedFinding}
+            alsoReportedBy={duplicatesByPrimary(model.findings).get(selectedFinding.id) ?? []}
             since={model.analysis.trend?.since ?? null}
             triageFile={model.analysis.triageSource ?? "codeland-triage.json"}
             onClose={() => props.onSelectFinding(null)}
@@ -329,7 +331,7 @@ function FindingsPanel(props: {
       )}
       {ranked.length === 0 && <p className="muted">Nenhum problema com esses filtros.</p>}
       <ol className="finding-list">
-        {ranked.slice(0, LIST_LIMIT).map(({ finding, building, priority }) => (
+        {ranked.slice(0, LIST_LIMIT).map(({ finding, building, priority, alsoReportedBy }) => (
           <li key={finding.id}>
             <button
               className={finding.id === props.selectedId ? "active" : ""}
@@ -340,6 +342,11 @@ function FindingsPanel(props: {
               <span className="finding-title">
                 {finding.title ?? finding.ruleId}
                 {isNew(finding, since) && <b className="badge-new">novo</b>}
+                {alsoReportedBy.length > 0 && (
+                  <b className="badge-also" title={alsoReportedBy.map((f) => f.source.tool).join(", ")}>
+                    +{alsoReportedBy.length}
+                  </b>
+                )}
               </span>
               <span className="finding-score">{priority.toFixed(1)}</span>
               <span className="finding-where">
@@ -368,6 +375,7 @@ function formatDate(iso: string): string {
 
 function FindingDetails(props: {
   finding: Finding;
+  alsoReportedBy: Finding[];
   since: string | null;
   triageFile: string;
   onClose: () => void;
@@ -411,6 +419,16 @@ function FindingDetails(props: {
             {source.kind === "agent" && " · agente"}
           </dd>
         </div>
+        {props.alsoReportedBy.length > 0 && (
+          <div>
+            <dt>Também em</dt>
+            <dd>
+              {props.alsoReportedBy
+                .map((f) => `${f.source.tool}${f.source.kind === "agent" ? " (agente)" : ""}: ${f.title ?? f.ruleId}`)
+                .join("; ")}
+            </dd>
+          </div>
+        )}
         <div>
           <dt>Visto desde</dt>
           <dd>

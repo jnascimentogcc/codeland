@@ -58,6 +58,8 @@ export interface RankedFinding {
   finding: Finding;
   /** The finding's file when it is a building of the city, else null. */
   building: Building | null;
+  /** Other findings that repeat this one (different tools, same place), most severe first. */
+  alsoReportedBy: Finding[];
   priority: number;
 }
 
@@ -76,6 +78,10 @@ export function priorityOf(finding: Finding, building: Building | null, maxChurn
   return weight * importance * (1 + 0.5 * uncovered) * (building.role === "test" ? 0.5 : 1);
 }
 
+/** Each extra tool that reports the same problem raises confidence, up to two. */
+const CORROBORATION = 0.25;
+const CORROBORATION_MAX = 2;
+
 /** Set aside by the scanner or by a human decision. */
 export function isSetAside(finding: Finding): boolean {
   return finding.status === "suppressed" || finding.triage !== undefined;
@@ -92,6 +98,7 @@ export function matches(
   since: string | null,
   skip?: "category" | "severity",
 ): boolean {
+  if (finding.duplicateOf !== null) return false; // shown under its primary finding
   if (isSetAside(finding) && !filter.showSuppressed) return false;
   if (filter.onlyNew && !isNew(finding, since)) return false;
   if (
@@ -119,11 +126,19 @@ export function rankFindings(model: CodelandCityModel, filter: FindingFilter): R
   const byPath = new Map(model.buildings.map((b) => [b.path, b]));
   const maxChurn = model.buildings.reduce((max, b) => Math.max(max, b.metrics.churnCommits), 0);
   const since = model.analysis.trend?.since ?? null;
+  const repeats = duplicatesByPrimary(model.findings);
   return model.findings
     .filter((f) => matches(f, filter, since))
     .map((finding) => {
       const building = byPath.get(finding.location.path) ?? null;
-      return { finding, building, priority: priorityOf(finding, building, maxChurn) };
+      const alsoReportedBy = repeats.get(finding.id) ?? [];
+      const corroboration = 1 + CORROBORATION * Math.min(alsoReportedBy.length, CORROBORATION_MAX);
+      return {
+        finding,
+        building,
+        alsoReportedBy,
+        priority: priorityOf(finding, building, maxChurn) * corroboration,
+      };
     })
     .sort(
       (a, b) =>
@@ -132,6 +147,19 @@ export function rankFindings(model: CodelandCityModel, filter: FindingFilter): R
         a.finding.location.path.localeCompare(b.finding.location.path) ||
         (a.finding.location.startLine ?? 0) - (b.finding.location.startLine ?? 0),
     );
+}
+
+/** Primary finding id -> the findings that repeat it, most severe first. */
+export function duplicatesByPrimary(findings: Finding[]): Map<string, Finding[]> {
+  const result = new Map<string, Finding[]>();
+  for (const finding of findings) {
+    if (finding.duplicateOf === null) continue;
+    result.set(finding.duplicateOf, [...(result.get(finding.duplicateOf) ?? []), finding]);
+  }
+  for (const list of result.values()) {
+    list.sort((a, b) => SEVERITIES.indexOf(a.severity) - SEVERITIES.indexOf(b.severity));
+  }
+  return result;
 }
 
 export interface Facets {
@@ -193,6 +221,6 @@ export interface TrendSummary {
 export function trendSummary(model: CodelandCityModel): TrendSummary | null {
   const trend = model.analysis.trend;
   if (!trend) return null;
-  const added = model.findings.filter((f) => !isSetAside(f) && isNew(f, trend.since)).length;
+  const added = model.findings.filter((f) => !isSetAside(f) && f.duplicateOf === null && isNew(f, trend.since)).length;
   return { since: trend.since, added, fixed: trend.fixed };
 }

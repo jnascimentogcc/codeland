@@ -6,7 +6,7 @@ export type SourceKind = "scanner" | "native" | "agent";
  * Contract between analyzers and clients. Raw metrics plus a persisted layout; clients decide visual mappings (see docs/architecture_and_mvp.md, section 2.2).
  */
 export interface CodelandCityModel {
-  schemaVersion: "0.4.0";
+  schemaVersion: "0.5.0";
   generatedAt: string;
   repository: {
     name: string;
@@ -188,6 +188,10 @@ export interface Finding {
     kind: SourceKind;
   };
   status: "open" | "suppressed";
+  /**
+   * Id of the finding this one repeats (same file and category, overlapping lines, reported by a different tool); null for primary findings. Clients show the primary and list the others as extra sources (docs 6.9).
+   */
+  duplicateOf: string | null;
   /**
    * generatedAt of the first model that contained this id, carried over through --previous; findings new in this model carry its own generatedAt.
    */

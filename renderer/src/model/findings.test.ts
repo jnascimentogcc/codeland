@@ -49,6 +49,7 @@ function finding(id: string, path: string, severity: Finding["severity"], extra:
     source: { tool: "t", version: null, kind: "scanner" },
     status: "open",
     firstSeen: OLD,
+    duplicateOf: null,
     ...extra,
   };
 }
@@ -133,6 +134,26 @@ describe("triage and trend", () => {
     expect(trendSummary(model)).toEqual({ since: SINCE, added: 1, fixed: [{ id: "z" }] });
     const none = { ...MODEL, analysis: { trend: null } } as unknown as CodelandCityModel;
     expect(trendSummary(none)).toBeNull();
+  });
+});
+
+describe("duplicates", () => {
+  const twice = {
+    ...MODEL,
+    findings: [
+      ...MODEL.findings,
+      finding("dup", "hot.ts", "medium", { duplicateOf: "b", source: { tool: "agent", version: null, kind: "agent" } }),
+    ],
+  } as CodelandCityModel;
+
+  it("hides a repeated finding and raises the priority of its primary", () => {
+    const before = rankFindings(MODEL, DEFAULT_FILTER).find((r) => r.finding.id === "b")!;
+    const ranked = rankFindings(twice, DEFAULT_FILTER);
+    expect(ranked.map((r) => r.finding.id)).not.toContain("dup");
+    const primary = ranked.find((r) => r.finding.id === "b")!;
+    expect(primary.alsoReportedBy.map((f) => f.id)).toEqual(["dup"]);
+    expect(primary.priority).toBeCloseTo(before.priority * 1.25);
+    expect(facets(twice, DEFAULT_FILTER).categories.maintainability).toBe(1);
   });
 });
 

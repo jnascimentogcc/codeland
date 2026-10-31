@@ -98,3 +98,13 @@ def test_broken_triage_files_fail_clearly(tmp_path, content):
     file.write_text(content, encoding="utf-8")
     with pytest.raises(TriageError, match="t.json"):
         read_triage(file)
+
+
+def test_a_decision_on_a_duplicate_covers_its_primary():
+    findings = [
+        {"id": "primary", "duplicateOf": None},
+        {"id": "copy", "duplicateOf": "primary"},
+    ]
+    entries = {"copy": {"state": "false-positive", "note": "n", "at": None}}
+    assert apply_triage(findings, entries) == []
+    assert findings[0]["triage"]["state"] == "false-positive"

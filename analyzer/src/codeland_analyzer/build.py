@@ -8,6 +8,7 @@ from typing import Any
 from codeland_analyzer import SCHEMA_VERSION
 from codeland_analyzer.churn import Churn, collect_churn
 from codeland_analyzer.coverage import read_lcov
+from codeland_analyzer.dedupe import mark_duplicates
 from codeland_analyzer.gitrepo import head_info, is_test, list_source_files
 from codeland_analyzer.layout import footprint_side, layout_city, slots_from_model
 from codeland_analyzer.native import DEFAULT_THRESHOLDS, SOURCE, NativeThresholds, native_findings
@@ -169,4 +170,5 @@ def collect_findings(
             f["id"],
         )
     )
+    mark_duplicates(findings)
     return findings, sources

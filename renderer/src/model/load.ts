@@ -1,6 +1,6 @@
 import type { CodelandCityModel } from "./city-model";
 
-export const SUPPORTED_SCHEMA_VERSION: CodelandCityModel["schemaVersion"] = "0.4.0";
+export const SUPPORTED_SCHEMA_VERSION: CodelandCityModel["schemaVersion"] = "0.5.0";
 
 /** Loads ?model=<url>, or public/city.json by default. */
 export async function loadDefaultModel(): Promise<CodelandCityModel> {

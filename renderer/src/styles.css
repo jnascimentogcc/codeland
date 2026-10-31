@@ -624,3 +624,4 @@ h2 {
 .badge-new { margin-left: 6px; padding: 0 5px; border-radius: 6px; font-size: 10px; font-weight: 600; color: #04121a; background: #5fe3ff; }
 .triage-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
 .finding-id { margin-top: 6px; font-size: 10px; word-break: break-all; }
+.badge-also { margin-left: 6px; padding: 0 5px; border-radius: 6px; font-size: 10px; font-weight: 600; color: #cfe8f2; background: rgba(95, 227, 255, 0.22); }

@@ -38,9 +38,17 @@ def write_triage(path: Path, entries: dict[str, dict[str, Any]]) -> None:
 
 
 def apply_triage(findings: list[dict[str, Any]], entries: dict[str, dict[str, Any]]) -> list[str]:
-    """Attaches `triage` to the matching findings; returns the ids that match nothing (stale)."""
+    """Attaches `triage` to the matching findings; returns the ids that match nothing (stale).
+
+    A decision about a finding also covers the primary it repeats (`duplicateOf`), so deciding on
+    the copy a tool reports is enough even when another tool's copy is the one shown.
+    """
     by_id = {f["id"]: f for f in findings}
     for key, entry in entries.items():
         if key in by_id:
             by_id[key]["triage"] = dict(entry)
+    for finding in findings:
+        primary = by_id.get(finding.get("duplicateOf") or "")
+        if primary is not None and "triage" in finding and "triage" not in primary:
+            primary["triage"] = dict(finding["triage"])
     return sorted(set(entries) - set(by_id))
