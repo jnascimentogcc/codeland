@@ -1,8 +1,13 @@
 """Resolution of import specifiers to repository files.
 
-Relative specifiers resolve against the importer. Bare specifiers resolve only through the
-nearest tsconfig.json's `paths`/`baseUrl` (following relative `extends`) and only when they land
-on a repository file; everything else is an external package.
+TypeScript: relative specifiers resolve against the importer. Bare specifiers resolve only
+through the nearest tsconfig.json's `paths`/`baseUrl` (following relative `extends`) and only when
+they land on a repository file; everything else is an external package.
+
+Python: relative imports (`from ..x import y`) resolve against the importer's package; absolute
+ones (`app.services.x`) resolve against any directory that is an ancestor of the importer and
+holds the module (the usual source roots: the repository, `src/`, `backend/`), falling back to a
+unique match elsewhere in the repository. Anything that lands on no repository file is external.
 """
 
 import json
@@ -10,6 +15,8 @@ import posixpath
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from codeland_analyzer.parse import ImportRef
 
 _SUFFIX_CANDIDATES = ("", ".ts", ".tsx", ".mts", ".cts", "/index.ts", "/index.tsx")
 # ESM TypeScript imports name the emitted file ("./a.js") while the source is "./a.ts".
@@ -187,3 +194,84 @@ def resolve(
         return _first_known(base, known_files)
     config = nearest(importer, tsconfigs) if tsconfigs else None
     return config.resolve(specifier, known_files) if config else None
+
+
+class PythonIndex:
+    """Dotted module path -> repository files, for every possible source root."""
+
+    def __init__(self, known_files: set[str]) -> None:
+        self.known = known_files
+        self._by_module: dict[tuple[str, ...], list[tuple[str, str]]] = {}
+        for path in known_files:
+            if not path.endswith(".py"):
+                continue
+            parts = path[:-3].split("/")
+            if parts[-1] == "__init__":
+                parts.pop()
+            for start in range(len(parts)):
+                key = tuple(parts[start:])
+                self._by_module.setdefault(key, []).append(("/".join(parts[:start]), path))
+
+    def absolute(self, importer: str, dotted: str) -> str | None:
+        hits = self._by_module.get(tuple(dotted.split(".")), [])
+        folder = posixpath.dirname(importer)
+        # A root is usable when the importer sits under it; the deepest one wins.
+        under = [
+            (root, path)
+            for root, path in hits
+            if root == "" or folder == root or folder.startswith(root + "/")
+        ]
+        if under:
+            return max(under, key=lambda hit: (len(hit[0]), hit[1]))[1]
+        return hits[0][1] if len(hits) == 1 else None
+
+    def relative(self, importer: str, dotted: str) -> str | None:
+        stripped = dotted.lstrip(".")
+        folder = posixpath.dirname(importer)
+        for _ in range(len(dotted) - len(stripped) - 1):
+            folder = posixpath.dirname(folder)
+        return self._module_file(
+            posixpath.join(folder, *stripped.split(".")) if stripped else folder
+        )
+
+    def _module_file(self, base: str) -> str | None:
+        base = posixpath.normpath(base)
+        for candidate in (f"{base}.py", f"{base}/__init__.py"):
+            if candidate in self.known:
+                return candidate
+        return None
+
+    def resolve(self, importer: str, ref: ImportRef) -> list[str]:
+        """Files the import refers to: the module and, for `from m import a`, each `a` that is a
+        submodule of it (an attribute such as a function resolves to nothing)."""
+        spec = ref.specifier
+        relative = spec.startswith(".")
+        find = self.relative if relative else self.absolute
+        found = []
+        if spec.strip("."):  # "from . import x" names no module of its own
+            module = find(importer, spec)
+        else:
+            module = self.relative(importer, spec) if relative else None
+        if module:
+            found.append(module)
+        for name in ref.names:
+            joined = spec + name if spec.endswith(".") else f"{spec}.{name}"
+            if hit := find(importer, joined):
+                found.append(hit)
+        return list(dict.fromkeys(found))
+
+
+class Resolver:
+    """Resolves the imports of any analyzed file to repository files."""
+
+    def __init__(self, known_files: set[str], tsconfigs: list[TsConfig] | None = None) -> None:
+        self.known = known_files
+        self.tsconfigs = tsconfigs or []
+        self.python = PythonIndex(known_files)
+
+    def resolve(self, importer: str, ref: ImportRef) -> tuple[list[str], bool]:
+        """(target files, whether the specifier is relative to the importer)."""
+        if importer.endswith(".py"):
+            return self.python.resolve(importer, ref), ref.specifier.startswith(".")
+        target = resolve(importer, ref.specifier, self.known, self.tsconfigs)
+        return ([target] if target else []), is_relative(ref.specifier)

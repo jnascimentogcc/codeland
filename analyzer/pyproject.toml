@@ -1,13 +1,14 @@
 [project]
 name = "codeland-analyzer"
 version = "0.1.0"
-description = "Builds the Codeland city model (schema/city-model.schema.json) from a TypeScript repository."
+description = "Builds the Codeland city model (schema/city-model.schema.json) from a TypeScript or Python repository."
 requires-python = ">=3.11"
 dependencies = [
     # 0.26.0 crashes (access violation) while walking larger trees on Windows.
     "tree-sitter>=0.23,<0.26",
     "tree-sitter-typescript>=0.23",
     "aiohttp>=3.11",
+    "tree-sitter-python>=0.23",
 ]
 
 [project.scripts]

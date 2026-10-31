@@ -110,3 +110,25 @@ def test_aliased_imports_become_edges_not_external(repo):
     assert {"from": "src/main.ts", "to": "src/lib/util.ts", "kind": "import"} in model["edges"]
     main = next(b for b in model["buildings"] if b["path"] == "src/main.ts")
     assert (main["metrics"]["imports"], main["metrics"]["externalImports"]) == (2, 1)
+
+
+def test_mixed_repository_builds_python_and_typescript_together(repo):
+    repo.write("web/src/app.ts", "export const a = 1;\n")
+    repo.write("backend/app/__init__.py", "")
+    repo.write("backend/app/services.py", "def run(x):\n    return x if x else 0\n")
+    repo.write(
+        "backend/app/main.py", "import os\nfrom app import services\nfrom .services import run\n"
+    )
+    repo.write("backend/tests/test_main.py", "from app.main import run\n")
+    repo.commit()
+    model = analyze(repo.root)
+    assert model["analysis"]["languages"] == ["python", "typescript"]
+    jsonschema.validate(model, SCHEMA)
+    roles = {b["path"]: b["role"] for b in model["buildings"]}
+    assert roles["backend/tests/test_main.py"] == "test"
+    assert roles["backend/app/main.py"] == "source"
+    edges = {(e["from"], e["to"]) for e in model["edges"]}
+    assert ("backend/app/main.py", "backend/app/services.py") in edges
+    assert ("backend/tests/test_main.py", "backend/app/main.py") in edges
+    main = next(b for b in model["buildings"] if b["path"] == "backend/app/main.py")
+    assert main["metrics"]["externalImports"] == 1  # os

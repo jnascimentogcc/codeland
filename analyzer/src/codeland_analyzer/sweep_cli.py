@@ -14,8 +14,9 @@ from codeland_analyzer.triage import TriageError
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="codeland-sweep",
-        description="Run a read-only Claude Code session over a TypeScript repository, save its "
-        "findings as SARIF (sweep agent contract, docs 6.8) and optionally re-analyze the city.",
+        description="Run a read-only Claude Code session over a TypeScript or Python repository, "
+        "save its findings as SARIF (sweep agent contract, docs 6.8) and optionally re-analyze "
+        "the city.",
     )
     parser.add_argument("repo", type=Path, help="path to the git repository")
     parser.add_argument("--kind", choices=list(KINDS), default="security", help="what to review")

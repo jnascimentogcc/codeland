@@ -81,7 +81,10 @@ class SweepReport:
 
 def build_prompt(kind: str, files: list[str]) -> str:
     listing = "\n".join(f"- {path}" for path in files)
-    return f"""You are a code review sweep agent. Review the TypeScript files below for
+    languages = " and ".join(
+        sorted({"Python" if path.endswith(".py") else "TypeScript" for path in files})
+    )
+    return f"""You are a code review sweep agent. Review the {languages} files below for
 {KINDS[kind]}.
 
 Files in scope (repository-relative paths):
@@ -181,7 +184,7 @@ def sweep(
     everything = list_source_files(repo)
     scope = sorted(p for p in everything if not paths or any(p.startswith(x) for x in paths))
     if not scope:
-        raise SweepError("no TypeScript files in scope")
+        raise SweepError("no TypeScript or Python files in scope")
     hashes = file_hashes(repo, everything)
 
     carried, state, rules = _resume(previous, kind, set(everything), set(scope), hashes)

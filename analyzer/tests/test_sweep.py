@@ -105,7 +105,7 @@ def test_unknown_kind_and_empty_scope_are_rejected(repo):
     make_sample(repo)
     with pytest.raises(SweepError, match="unknown kind"):
         sweep(repo.root, "vibes", agent=lambda *a: "")
-    with pytest.raises(SweepError, match="no TypeScript files"):
+    with pytest.raises(SweepError, match="no TypeScript or Python files"):
         sweep(repo.root, "security", agent=lambda *a: "", paths=["nowhere/"])
 
 

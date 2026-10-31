@@ -14,7 +14,7 @@ from codeland_analyzer.triage import TriageError, read_triage
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="codeland-analyze",
-        description="Build the Codeland city model of a TypeScript git repository.",
+        description="Build the Codeland city model of a TypeScript and/or Python git repository.",
     )
     parser.add_argument("repo", type=Path, help="path to the git repository")
     parser.add_argument("-o", "--output", type=Path, help="output JSON file (default: stdout)")

@@ -9,11 +9,17 @@ from codeland_analyzer import SCHEMA_VERSION
 from codeland_analyzer.churn import Churn, collect_churn
 from codeland_analyzer.coverage import read_lcov
 from codeland_analyzer.dedupe import mark_duplicates
-from codeland_analyzer.gitrepo import head_info, is_test, list_source_files, list_tsconfigs
+from codeland_analyzer.gitrepo import (
+    head_info,
+    is_test,
+    language_of,
+    list_source_files,
+    list_tsconfigs,
+)
 from codeland_analyzer.layout import footprint_side, layout_city, slots_from_model
 from codeland_analyzer.native import DEFAULT_THRESHOLDS, SOURCE, NativeThresholds, native_findings
-from codeland_analyzer.parse import FileMetrics, analyze_source
-from codeland_analyzer.resolve import is_relative, load_tsconfigs, resolve
+from codeland_analyzer.parse import FileMetrics, analyze_file
+from codeland_analyzer.resolve import Resolver, load_tsconfigs
 from codeland_analyzer.sarif import read_sarif
 from codeland_analyzer.trend import apply_trend
 from codeland_analyzer.triage import apply_triage, read_triage
@@ -46,10 +52,9 @@ def analyze(
     repo = repo.resolve()
     files = list_source_files(repo)
     known = set(files)
-    tsconfigs = load_tsconfigs(repo, list_tsconfigs(repo))
+    resolver = Resolver(known, load_tsconfigs(repo, list_tsconfigs(repo)))
     parsed: dict[str, FileMetrics] = {
-        path: analyze_source((repo / path).read_bytes(), tsx=path.endswith(".tsx"))
-        for path in files
+        path: analyze_file(path, (repo / path).read_bytes()) for path in files
     }
     churn = collect_churn(repo, churn_days)
     coverage_by_file = read_lcov(coverage, repo) if coverage else {}
@@ -61,14 +66,15 @@ def analyze(
         external: set[str] = set()
         seen_edges: set[tuple[str, str]] = set()
         for ref in metrics.imports:
-            target = resolve(path, ref.specifier, known, tsconfigs)
-            if target is None:
-                (targets if is_relative(ref.specifier) else external).add(ref.specifier)
+            resolved, relative = resolver.resolve(path, ref)
+            if not resolved:
+                (targets if relative else external).add(ref.specifier)
                 continue
-            targets.add(target)
-            if target != path and (target, ref.kind) not in seen_edges:
-                seen_edges.add((target, ref.kind))
-                edges.append({"from": path, "to": target, "kind": ref.kind})
+            for target in resolved:
+                targets.add(target)
+                if target != path and (target, ref.kind) not in seen_edges:
+                    seen_edges.add((target, ref.kind))
+                    edges.append({"from": path, "to": target, "kind": ref.kind})
         import_counts[path] = (len(targets) + len(external), len(external))
 
     # Decisions rather than complexity, so files with many trivial functions (test callbacks)
@@ -133,7 +139,7 @@ def analyze(
         "generatedAt": generated_at,
         "repository": {"name": repo.name, "commit": commit, "branch": branch},
         "analysis": {
-            "language": "typescript",
+            "languages": sorted({language_of(path) for path in files} - {None}),
             "churnWindowDays": churn_days,
             "coverageSource": coverage.as_posix() if coverage else None,
             "findingSources": finding_sources,

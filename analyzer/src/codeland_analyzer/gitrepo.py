@@ -4,9 +4,11 @@ import subprocess
 from pathlib import Path
 
 TS_SUFFIXES = (".ts", ".tsx", ".mts", ".cts")
+PY_SUFFIXES = (".py",)
 _DECLARATION_SUFFIXES = (".d.ts", ".d.mts", ".d.cts")
 _TEST_FOLDERS = frozenset({"test", "tests", "__tests__"})
 _TEST_MARKERS = (".test.", ".spec.")
+_PY_TEST_FILES = ("conftest.py",)
 
 
 def git(repo: Path, *args: str) -> str:
@@ -19,13 +21,26 @@ def git(repo: Path, *args: str) -> str:
     ).stdout
 
 
+def language_of(path: str) -> str | None:
+    """ "typescript" or "python" for an analyzable source file, else None."""
+    if path.endswith(PY_SUFFIXES):
+        return "python"
+    if path.endswith(TS_SUFFIXES) and not path.endswith(_DECLARATION_SUFFIXES):
+        return "typescript"
+    return None
+
+
 def is_source(path: str) -> bool:
-    return path.endswith(TS_SUFFIXES) and not path.endswith(_DECLARATION_SUFFIXES)
+    return language_of(path) is not None
 
 
 def is_test(path: str) -> bool:
     *folders, name = path.split("/")
-    return any(marker in name for marker in _TEST_MARKERS) or not _TEST_FOLDERS.isdisjoint(folders)
+    if any(marker in name for marker in _TEST_MARKERS) or not _TEST_FOLDERS.isdisjoint(folders):
+        return True
+    return name.endswith(PY_SUFFIXES) and (
+        name.startswith("test_") or name.endswith("_test.py") or name in _PY_TEST_FILES
+    )
 
 
 def list_source_files(repo: Path) -> list[str]:

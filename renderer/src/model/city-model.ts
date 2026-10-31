@@ -6,7 +6,7 @@ export type SourceKind = "scanner" | "native" | "agent";
  * Contract between analyzers and clients. Raw metrics plus a persisted layout; clients decide visual mappings (see docs/architecture_and_mvp.md, section 2.2).
  */
 export interface CodelandCityModel {
-  schemaVersion: "0.5.0";
+  schemaVersion: "0.6.0";
   generatedAt: string;
   repository: {
     name: string;
@@ -17,7 +17,10 @@ export interface CodelandCityModel {
     branch: string | null;
   };
   analysis: {
-    language: "typescript";
+    /**
+     * Languages of the analyzed files (a repository can mix them, e.g. a TypeScript frontend and a Python backend).
+     */
+    languages: ("typescript" | "python")[];
     churnWindowDays: number;
     /**
      * Coverage report used, or null when coverage was not provided.
