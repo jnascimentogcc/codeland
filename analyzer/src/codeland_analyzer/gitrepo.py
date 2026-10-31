@@ -43,3 +43,18 @@ def head_info(repo: Path) -> tuple[str | None, str | None]:
         return None, None
     branch = git(repo, "rev-parse", "--abbrev-ref", "HEAD").strip()
     return commit, None if branch == "HEAD" else branch
+
+
+def file_hashes(repo: Path, paths: list[str]) -> dict[str, str]:
+    """Git blob hash of each file's current content (working tree, committed or not)."""
+    if not paths:
+        return {}
+    out = subprocess.run(
+        ["git", "-C", str(repo), "hash-object", "--stdin-paths"],
+        input="\n".join(paths) + "\n",
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+    ).stdout
+    return dict(zip(paths, out.split(), strict=True))

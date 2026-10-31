@@ -42,6 +42,13 @@ def main(argv: list[str] | None = None) -> int:
         "files, where a single session reads a different subset each time",
     )
     parser.add_argument(
+        "--incremental",
+        action="store_true",
+        help="if the output file is an earlier sweep of the same kind, review only the files whose "
+        "content changed since, keep the findings of the others and replace those of the changed "
+        "ones (a change in one file can affect findings in another: sweep fully now and then)",
+    )
+    parser.add_argument(
         "--path",
         action="append",
         default=[],
@@ -66,6 +73,9 @@ def main(argv: list[str] | None = None) -> int:
     output = args.output or Path(f"codeland-sweep-{args.kind}.sarif")
     try:
         print(f"sweeping {args.repo} for {args.kind} with {args.model}...", file=sys.stderr)
+        previous = None
+        if args.incremental and output.exists():
+            previous = json.loads(output.read_text(encoding="utf-8"))
         report = sweep(
             args.repo,
             args.kind,
@@ -74,9 +84,11 @@ def main(argv: list[str] | None = None) -> int:
             paths=args.path or None,
             runs=args.runs,
             chunk=args.chunk,
+            previous=previous,
         )
         output.write_text(json.dumps(report.document, indent=2) + "\n", encoding="utf-8")
-        print(f"{output}: {report.results} findings", file=sys.stderr)
+        scope = f"{report.swept} of {report.total} files reviewed"
+        print(f"{output}: {report.results} findings ({scope})", file=sys.stderr)
         if report.dropped:
             print(
                 f"  {report.dropped} results dropped (outside scope or over the cap)",

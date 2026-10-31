@@ -1,5 +1,5 @@
 """codeland-sweep: runs a read-only Claude Code session over a repository and turns its answer into
-a SARIF report that follows the sweep agent contract (docs 6.8)."""
+a SARIF report that follows the sweep agent contract (docs 6.8, 6.10)."""
 
 import json
 import re
@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from codeland_analyzer.gitrepo import list_source_files
+from codeland_analyzer.gitrepo import file_hashes, list_source_files
 from codeland_analyzer.sarif import FINGERPRINT_KEY, KIND_PROPERTY
 
 KINDS = {
@@ -52,10 +52,17 @@ SLUG_HELP = {
 }
 MAX_RESULTS = 100
 DEFAULT_MODEL = "claude-sonnet-5-5"
+# Run property that makes a report resumable: the content hash of every file already swept.
+STATE_KEY = "codeland/sweep"
+STATE_VERSION = 1  # bump when the prompt or the vocabulary changes: old state no longer applies
 
 
 class SweepError(Exception):
     pass
+
+
+class AgentUnavailable(SweepError):
+    """Retrying cannot help (no `claude` on PATH)."""
 
 
 # (prompt, repo, model, budget in USD) -> the agent's final answer
@@ -68,6 +75,8 @@ class SweepReport:
     results: int
     dropped: int = 0
     notes: list[str] = field(default_factory=list)
+    swept: int = 0  # files sent to the agent in this run
+    total: int = 0  # files in scope
 
 
 def build_prompt(kind: str, files: list[str]) -> str:
@@ -107,7 +116,7 @@ def run_claude(prompt: str, repo: Path, model: str, budget: float) -> str:
     """One headless Claude Code session restricted to read-only tools."""
     executable = shutil.which("claude")
     if executable is None:
-        raise SweepError("the `claude` CLI (Claude Code) was not found on PATH")
+        raise AgentUnavailable("the `claude` CLI (Claude Code) was not found on PATH")
     command = [
         executable,
         "-p",
@@ -155,39 +164,155 @@ def sweep(
     paths: list[str] | None = None,
     runs: int = 1,
     chunk: int | None = None,
+    previous: dict[str, Any] | None = None,
 ) -> SweepReport:
     """Runs the agent and returns a normalized SARIF document (see `normalize`).
 
     chunk: review at most this many files per session (sorted, so folders stay together) and merge
     the results; one session over a large scope reads a different subset each time (docs 6.10).
     runs: sessions per chunk, merged by finding identity.
+    previous: an earlier report of the same kind (incremental sweep): only files whose content
+    changed since it are sent to the agent; the findings of untouched files are carried over and
+    those of changed files are replaced. A file in a session that failed is retried next time.
     """
     if kind not in KINDS:
         raise SweepError(f"unknown kind {kind!r}; choose one of {', '.join(KINDS)}")
     repo = repo.resolve()
-    files = [p for p in list_source_files(repo) if not paths or any(p.startswith(x) for x in paths)]
-    if not files:
+    everything = list_source_files(repo)
+    scope = sorted(p for p in everything if not paths or any(p.startswith(x) for x in paths))
+    if not scope:
         raise SweepError("no TypeScript files in scope")
-    files.sort()  # neighbours in the sorted list share folders, so chunks stay coherent
-    groups = [files[i : i + chunk] for i in range(0, len(files), chunk)] if chunk else [files]
+    hashes = file_hashes(repo, everything)
+
+    carried, state, rules = _resume(previous, kind, set(everything), set(scope), hashes)
+    todo = [p for p in scope if state.get(p) != hashes[p]]
+    groups = [todo[i : i + chunk] for i in range(0, len(todo), chunk)] if chunk else [todo]
     reports: list[SweepReport] = []
     failures: list[str] = []
-    for group in groups:
+    for group in filter(None, groups):
         prompt = build_prompt(kind, group)
+        succeeded = False
         for _ in range(max(runs, 1)):
             try:
-                answer = (agent or run_claude)(prompt, repo, model, budget)
-                reports.append(normalize(answer, kind, model, set(group)))
+                reports.append(
+                    _session(agent or run_claude, prompt, repo, model, budget, group, kind)
+                )
+                succeeded = True
+            except AgentUnavailable:
+                raise
             except SweepError as error:  # one failed session must not cost the others
                 failures.append(str(error))
-    if not reports:
+        for path in group if succeeded else []:
+            state[path] = hashes[path]
+    if todo and not reports:
         raise SweepError(failures[0])
-    report = reports[0] if len(reports) == 1 else merge(reports)
+
+    results: dict[str, dict[str, Any]] = {}
+    for result in carried:
+        results.setdefault(_key(result), result)
+    for report in reports:
+        run = report.document["runs"][0]
+        rules.update({r["id"]: r for r in run["tool"]["driver"]["rules"]})
+        for result in run["results"]:
+            results.setdefault(_key(result), result)
+    notes = sorted({n for report in reports for n in report.notes})
     if failures:
-        report.notes.append(
-            f"{len(failures)} of {len(failures) + len(reports)} sessions failed: {failures[0]}"
-        )
-    return report
+        sessions = len(failures) + len(reports)
+        notes.append(f"{len(failures)} of {sessions} sessions failed: {failures[0]}")
+    document = _document(kind, model, list(results.values()), rules, state)
+    return SweepReport(
+        document,
+        len(results),
+        sum(r.dropped for r in reports),
+        notes,
+        swept=len(todo),
+        total=len(scope),
+    )
+
+
+def _session(
+    agent: Agent, prompt: str, repo: Path, model: str, budget: float, group: list[str], kind: str
+) -> SweepReport:
+    """One session, tried twice: a model now and then answers with something that is not SARIF."""
+    for attempt in (1, 2):
+        try:
+            return normalize(agent(prompt, repo, model, budget), kind, model, set(group))
+        except AgentUnavailable:
+            raise
+        except SweepError:
+            if attempt == 2:
+                raise
+    raise AssertionError("unreachable")
+
+
+def _key(result: dict[str, Any]) -> str:
+    return f"{_result_path(result)}\x1f{result['fingerprints'][FINGERPRINT_KEY]}"
+
+
+def _resume(
+    previous: dict[str, Any] | None,
+    kind: str,
+    existing: set[str],
+    scope: set[str],
+    hashes: dict[str, str],
+) -> tuple[list[dict[str, Any]], dict[str, str], dict[str, dict[str, Any]]]:
+    """(results to carry over, hash of each already swept file, their rule descriptions).
+
+    A previous report only counts when it is a sweep of the same kind and prompt version; a file
+    that no longer exists is forgotten and a file in scope whose content changed is swept again.
+    Files outside the scope (`--path`) keep what the earlier report knew about them.
+    """
+    try:
+        run = previous["runs"][0]  # type: ignore[index]
+        meta = run["properties"][STATE_KEY]
+        known = {p: h for p, h in meta["files"].items() if isinstance(h, str)}
+        valid = meta["kind"] == kind and meta["version"] == STATE_VERSION
+    except (KeyError, IndexError, TypeError, AttributeError):
+        return [], {}, {}
+    if not valid:
+        return [], {}, {}
+    state = {p: h for p, h in known.items() if p in existing and (p not in scope or h == hashes[p])}
+    carried = [
+        r
+        for r in run.get("results") or []
+        if _result_path(r) in state and (r.get("fingerprints") or {}).get(FINGERPRINT_KEY)
+    ]
+    rules = {r["id"]: r for r in run["tool"]["driver"].get("rules") or [] if "id" in r}
+    return carried, state, rules
+
+
+def _document(
+    kind: str,
+    model: str,
+    results: list[dict[str, Any]],
+    rules: dict[str, dict[str, Any]],
+    state: dict[str, str],
+) -> dict[str, Any]:
+    results.sort(key=lambda r: (_result_path(r) or "", r["fingerprints"][FINGERPRINT_KEY]))
+    used = sorted({r["ruleId"] for r in results})
+    return {
+        "version": "2.1.0",
+        "runs": [
+            {
+                "tool": {
+                    "driver": {
+                        "name": f"claude-code-sweep-{kind}",
+                        "semanticVersion": model,
+                        "properties": {KIND_PROPERTY: "agent"},
+                        "rules": [{**rules.get(rule_id, {}), "id": rule_id} for rule_id in used],
+                    }
+                },
+                "properties": {
+                    STATE_KEY: {
+                        "kind": kind,
+                        "version": STATE_VERSION,
+                        "files": dict(sorted(state.items())),
+                    }
+                },
+                "results": results,
+            }
+        ],
+    }
 
 
 def normalize(answer: str, kind: str, model: str, files: set[str]) -> SweepReport:
@@ -224,47 +349,21 @@ def normalize(answer: str, kind: str, model: str, files: set[str]) -> SweepRepor
     )
     unique: dict[str, dict[str, Any]] = {}
     for result in kept:
-        unique.setdefault(result["fingerprints"][FINGERPRINT_KEY], result)
+        unique.setdefault(_key(result), result)
     dropped += len(kept) - len(unique)  # the same slug and symbol twice is one finding
     kept = list(unique.values())
 
-    driver = run.setdefault("tool", {}).setdefault("driver", {})
-    driver["name"] = f"claude-code-sweep-{kind}"
-    driver["semanticVersion"] = model
-    driver["properties"] = {**(driver.get("properties") or {}), KIND_PROPERTY: "agent"}
+    driver = run.get("tool", {}).get("driver", {}) if isinstance(run.get("tool"), dict) else {}
     described = {
         _rule_id(kind, rule["id"]): rule
         for rule in driver.get("rules") or []
         if isinstance(rule, dict) and isinstance(rule.get("id"), str)
     }
-    driver["rules"] = [
-        {**described.get(rule_id, {}), "id": rule_id}
-        for rule_id in sorted({r["ruleId"] for r in kept})
-    ]
-    run["results"] = kept
-    document["version"] = "2.1.0"
-    document["runs"] = [run]
-    return SweepReport(document, len(kept), dropped, notes)
-
-
-def merge(reports: list[SweepReport]) -> SweepReport:
-    """Union of several runs by finding identity: one session can miss what the next one finds."""
-    first = reports[0]
-    run = first.document["runs"][0]
-    seen: dict[str, dict[str, Any]] = {}
-    for report in reports:
-        for result in report.document["runs"][0]["results"]:
-            seen.setdefault(result["fingerprints"][FINGERPRINT_KEY], result)
-    run["results"] = list(seen.values())[:MAX_RESULTS]
     rules = {
-        r["id"]: r for rep in reports for r in rep.document["runs"][0]["tool"]["driver"]["rules"]
+        rule_id: {**described.get(rule_id, {}), "id": rule_id}
+        for rule_id in sorted({r["ruleId"] for r in kept})
     }
-    run["tool"]["driver"]["rules"] = [
-        rules[i] for i in sorted({r["ruleId"] for r in run["results"]})
-    ]
-    notes = sorted({n for report in reports for n in report.notes})
-    dropped = sum(r.dropped for r in reports)
-    return SweepReport(first.document, len(run["results"]), dropped, notes)
+    return SweepReport(_document(kind, model, kept, rules, {}), len(kept), dropped, notes)
 
 
 def _rule_id(kind: str, raw: str) -> str:
