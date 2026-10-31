@@ -128,6 +128,56 @@ def test_absolute_file_uris_inside_the_repository_are_made_relative(repo):
     assert imported.sources[0]["dropped"] == 1
 
 
+def test_container_paths_placeholder_fingerprints_and_linter_errors(repo):
+    """What Semgrep in Docker and ESLint really emit."""
+    make_sample(repo)
+    report = repo.root.parent / "real.sarif"
+
+    def result(rule, uri, level, line):
+        return {
+            "ruleId": rule,
+            "level": level,
+            "message": {"text": "m"},
+            "fingerprints": {"matchBasedId/v1": "requires login"},
+            "locations": [
+                {
+                    "physicalLocation": {
+                        "artifactLocation": {"uri": uri, "uriBaseId": "%SRCROOT%"},
+                        "region": {"startLine": line, "snippet": {"text": f"code {line}"}},
+                    }
+                }
+            ],
+        }
+
+    results = [
+        result("sg.a", "/src/src/util.ts", "error", 1),  # repo mounted at /src
+        result("sg.a", "/src/src/util.ts", "error", 2),
+        result("sg.a", "/etc/passwd", "error", 1),
+        result("sg.a", "/home/runner/work/x/x/src/../../../../etc/hosts", "error", 1),
+        result("no-var", "src/main.ts", "error", 3),
+    ]
+    run = {
+        "tool": {
+            "driver": {
+                "name": "ESLint",
+                "rules": [{"id": "no-var"}, {"id": "sg.a", "properties": {"tags": ["security"]}}],
+            }
+        },
+        "results": results,
+    }
+    report.write_text(json.dumps({"version": "2.1.0", "runs": [run]}), encoding="utf-8")
+
+    imported = read_sarif(report, repo.root)
+
+    paths = [f["location"]["path"] for f in imported.findings]
+    assert paths == ["src/util.ts", "src/util.ts", "src/main.ts"]
+    assert imported.sources[0]["dropped"] == 2
+    first, second, linter = imported.findings
+    assert first["id"] != second["id"]  # the placeholder fingerprint does not merge them
+    assert (linter["category"], linter["severity"]) == ("maintainability", "medium")
+    assert first["severity"] == "high"  # level error outside maintainability stays high
+
+
 @pytest.mark.parametrize("content", ['{"version": "2.0.0", "runs": []}', "not json", "[]"])
 def test_unsupported_or_broken_files_fail_clearly(repo, content):
     report = repo.root.parent / "bad.sarif"

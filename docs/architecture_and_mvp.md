@@ -245,7 +245,7 @@ Codeland turns what it already measures into maintainability findings, with `sou
 |---|---|
 | **A. Findings in the model** — *implemented* | Schema v0.3.0, SARIF importer, native findings, tests with real SARIF samples. |
 | **B. Problems layer and panel** — *implemented* | Renderer layer, filters, priority ordering, click-to-fly. |
-| **C. Real scanners on bella-nina** | Run Semgrep/ESLint to produce SARIF and check the ranking against what the team expects. |
+| **C. Real scanners on bella-nina** — *implemented* | ESLint 9 (typescript-eslint, SARIF formatter) and Semgrep 1.18x (Docker; the pip build does not run on Windows) ran on bella-nina and on a copy with planted problems. bella-nina itself is clean for both (0 findings), so the planted copy is what exercised the importer. Real output exposed three things the hand-written fixtures hid: containers and CI report absolute paths outside the repo (`/src/src/a.ts`; now matched by their longest tail that is a repo file), Semgrep OSS writes the fingerprint `requires login` on every result (ignored: values with spaces), and linters report must-fix style rules as `error` (a maintainability finding from `level` alone is capped at medium). Semgrep only scans git-tracked files. |
 | **D. Trend and triage** | Compare scans by `id` (new / fixed), sidecar triage file. |
 | **E. Sweep agents** | Agents that write SARIF (security first, then others), delivered through the paused live channel if useful. |
 

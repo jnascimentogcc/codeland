@@ -89,13 +89,14 @@ def _read_run(
             continue
         seen.add(finding_id)
         severity_score = _security_severity(item, rule)
+        category = _category(tool, rule_id, rule, item, severity_score)
         findings.append(
             {
                 "id": finding_id,
                 "ruleId": rule_id,
                 "title": _title(rule),
-                "category": _category(tool, rule_id, rule, item, severity_score),
-                "severity": _severity(item, rule, severity_score),
+                "category": category,
+                "severity": _severity(item, rule, severity_score, category),
                 "message": _message(item),
                 "location": location,
                 "source": {"tool": tool, "version": _text(version), "kind": "scanner"},
@@ -164,7 +165,9 @@ def _security_severity(item: dict[str, Any], rule: dict[str, Any]) -> float | No
     return None
 
 
-def _severity(item: dict[str, Any], rule: dict[str, Any], score: float | None) -> str:
+def _severity(
+    item: dict[str, Any], rule: dict[str, Any], score: float | None, category: str
+) -> str:
     if score is not None:
         if score >= 9:
             return "critical"
@@ -174,7 +177,9 @@ def _severity(item: dict[str, Any], rule: dict[str, Any], score: float | None) -
             return "medium"
         return "low" if score > 0 else "info"
     level = item.get("level") or (rule.get("defaultConfiguration") or {}).get("level") or "warning"
-    return _LEVEL_SEVERITY.get(level, "medium")
+    severity = _LEVEL_SEVERITY.get(level, "medium")
+    # Linters report their must-fix style rules as "error"; that is not an urgent problem.
+    return "medium" if severity == "high" and category == "maintainability" else severity
 
 
 def _category(
@@ -201,6 +206,8 @@ def _category(
 def _fingerprint(item: dict[str, Any], tool: str, rule_id: str, path: str) -> str:
     """Never derived from line numbers, so a finding survives code moving inside its file."""
     prints = {**(item.get("partialFingerprints") or {}), **(item.get("fingerprints") or {})}
+    # Semgrep OSS fills the placeholder "requires login", identical for every result.
+    prints = {k: v for k, v in prints.items() if isinstance(v, str) and v and " " not in v}
     if prints:
         key, value = sorted(prints.items())[0]
         basis = f"{key}={value}"
@@ -247,11 +254,26 @@ def _repo_path(
         try:
             return Path(raw).resolve().relative_to(repo).as_posix()
         except ValueError:
-            return None
+            return _suffix_in_repo(raw, repo)
     path = posixpath.normpath(raw.replace("\\", "/"))
     if path.startswith("../") or path in (".", ".."):
         return None
     return path
+
+
+def _suffix_in_repo(raw: str, repo: Path) -> str | None:
+    """Containers and CI report paths like /src/src/a.ts or /home/runner/work/r/r/src/a.ts: take
+    the longest tail that is a file of the repo (a lone file name only right under a root)."""
+    parts = [p for p in re.split(r"[\/]+", raw) if p and p != "."]
+    if ".." in parts:
+        return None
+    for start in range(len(parts)):
+        tail = parts[start:]
+        if len(tail) == 1 and len(parts) > 2:
+            break
+        if (repo.joinpath(*tail)).is_file():
+            return "/".join(tail)
+    return None
 
 
 def _is_absolute_uri(uri: str) -> bool:
