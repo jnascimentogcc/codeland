@@ -7,7 +7,12 @@ import {
   priorityOf,
   problemsByBuilding,
   rankFindings,
+  trendSummary,
 } from "./findings";
+
+const OLD = "2026-01-01T00:00:00+00:00";
+const SINCE = "2026-06-01T00:00:00+00:00";
+const NEW = "2026-10-01T00:00:00+00:00";
 
 function building(path: string, hotspot: number, churnCommits: number, coverage: number | null): Building {
   return {
@@ -43,14 +48,16 @@ function finding(id: string, path: string, severity: Finding["severity"], extra:
     location: { path, startLine: 3, endLine: 3 },
     source: { tool: "t", version: null, kind: "scanner" },
     status: "open",
+    firstSeen: OLD,
     ...extra,
   };
 }
 
 const MODEL = {
   buildings: [building("calm.ts", 0, 0, 1), building("hot.ts", 1, 10, 0.2)],
+  analysis: { trend: { since: SINCE, fixed: [{ id: "z" }] } },
   findings: [
-    finding("a", "calm.ts", "high"),
+    finding("a", "calm.ts", "high", { firstSeen: NEW }),
     finding("b", "hot.ts", "medium", { category: "maintainability" }),
     finding("c", "package-lock.json", "critical", { category: "dependencies" }),
     finding("d", "hot.ts", "low", { status: "suppressed" }),
@@ -98,6 +105,34 @@ describe("filters", () => {
     // Severities are counted among findings that pass the category filter only.
     expect(counts.severities.high).toBe(1);
     expect(counts.severities.critical).toBe(0);
+  });
+});
+
+describe("triage and trend", () => {
+  const triaged = (id: string, state: "accepted" | "false-positive") =>
+    finding(id, "calm.ts", "critical", { triage: { state, note: null, at: null } });
+  const withTriage = {
+    ...MODEL,
+    findings: [...MODEL.findings, triaged("t", "accepted")],
+  } as CodelandCityModel;
+
+  it("hides triaged findings like suppressed ones, unless asked", () => {
+    expect(rankFindings(withTriage, DEFAULT_FILTER).map((r) => r.finding.id)).not.toContain("t");
+    const all = rankFindings(withTriage, { ...DEFAULT_FILTER, showSuppressed: true });
+    expect(all.map((r) => r.finding.id)).toContain("t");
+  });
+
+  it("filters to findings first seen after the previous model", () => {
+    const only = rankFindings(MODEL, { ...DEFAULT_FILTER, onlyNew: true });
+    expect(only.map((r) => r.finding.id)).toEqual(["a"]);
+  });
+
+  it("summarizes new and fixed findings, ignoring triaged ones", () => {
+    const fresh = finding("n", "calm.ts", "low", { firstSeen: NEW, triage: { state: "accepted", note: null, at: null } });
+    const model = { ...MODEL, findings: [...MODEL.findings, fresh] } as CodelandCityModel;
+    expect(trendSummary(model)).toEqual({ since: SINCE, added: 1, fixed: [{ id: "z" }] });
+    const none = { ...MODEL, analysis: { trend: null } } as unknown as CodelandCityModel;
+    expect(trendSummary(none)).toBeNull();
   });
 });
 

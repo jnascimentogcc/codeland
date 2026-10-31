@@ -6,7 +6,7 @@ export type SourceKind = "scanner" | "native" | "agent";
  * Contract between analyzers and clients. Raw metrics plus a persisted layout; clients decide visual mappings (see docs/architecture_and_mvp.md, section 2.2).
  */
 export interface CodelandCityModel {
-  schemaVersion: "0.3.0";
+  schemaVersion: "0.4.0";
   generatedAt: string;
   repository: {
     name: string;
@@ -27,6 +27,14 @@ export interface CodelandCityModel {
      * Where the findings came from: one entry per imported SARIF file plus one for Codeland's own native findings.
      */
     findingSources: FindingSource[];
+    /**
+     * Triage file applied to the findings, or null.
+     */
+    triageSource: string | null;
+    /**
+     * Findings compared with the previous model (--previous); null when there was none.
+     */
+    trend: null | Trend;
   };
   /**
    * Folders (city blocks). The repository root is the district with path "".
@@ -61,6 +69,23 @@ export interface FindingSource {
    * Results ignored: no location, a location outside the repository, or an id already seen.
    */
   dropped: number;
+}
+export interface Trend {
+  /**
+   * generatedAt of the previous model; a finding is new when its firstSeen is later.
+   */
+  since: string;
+  /**
+   * Findings of the previous model that are gone, counted only for tools that reported in both runs (a missing report is not a fix).
+   */
+  fixed: {
+    id: string;
+    ruleId: string;
+    title: string | null;
+    category: "security" | "reliability" | "maintainability" | "testing" | "dependencies" | "performance" | "other";
+    severity: "critical" | "high" | "medium" | "low" | "info";
+    path: string;
+  }[];
 }
 export interface District {
   id: string;
@@ -163,4 +188,19 @@ export interface Finding {
     kind: SourceKind;
   };
   status: "open" | "suppressed";
+  /**
+   * generatedAt of the first model that contained this id, carried over through --previous; findings new in this model carry its own generatedAt.
+   */
+  firstSeen: string;
+  /**
+   * Human decision from the triage file (docs 6.7); absent when untriaged.
+   */
+  triage?: {
+    state: "accepted" | "false-positive";
+    note: string | null;
+    /**
+     * Date of the decision.
+     */
+    at: string | null;
+  };
 }

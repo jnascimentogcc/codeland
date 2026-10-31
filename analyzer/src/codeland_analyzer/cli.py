@@ -8,6 +8,7 @@ from pathlib import Path
 from codeland_analyzer.build import analyze
 from codeland_analyzer.native import DEFAULT_THRESHOLDS, NativeThresholds
 from codeland_analyzer.sarif import SarifError
+from codeland_analyzer.triage import TriageError, read_triage
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -41,6 +42,11 @@ def main(argv: list[str] | None = None) -> int:
         help="SARIF 2.1.0 report to import as findings (repeatable)",
     )
     parser.add_argument(
+        "--triage",
+        type=Path,
+        help="triage file with decisions about findings (managed with codeland-triage)",
+    )
+    parser.add_argument(
         "--no-native", action="store_true", help="skip Codeland's own maintainability findings"
     )
     defaults = DEFAULT_THRESHOLDS
@@ -70,8 +76,9 @@ def main(argv: list[str] | None = None) -> int:
             previous=previous,
             sarif=args.sarif,
             native=native,
+            triage=args.triage,
         )
-    except SarifError as error:
+    except (SarifError, TriageError) as error:
         print(f"codeland-analyze: {error}", file=sys.stderr)
         return 2
     text = json.dumps(model, indent=2, ensure_ascii=False)
@@ -88,6 +95,16 @@ def main(argv: list[str] | None = None) -> int:
     for source in model["analysis"]["findingSources"]:
         dropped = f", {source['dropped']} ignored" if source["dropped"] else ""
         print(f"  findings: {source['tool']} {source['findings']}{dropped}", file=sys.stderr)
+    trend = model["analysis"]["trend"]
+    if trend:
+        since = trend["since"]
+        added = sum(1 for f in model["findings"] if f["firstSeen"] > since)
+        print(f"  trend since {since}: {added} new, {len(trend['fixed'])} fixed", file=sys.stderr)
+    if args.triage:
+        ids = {f["id"] for f in model["findings"]}
+        entries = read_triage(args.triage)
+        stale = sum(1 for key in entries if key not in ids)
+        print(f"  triage: {len(entries) - stale} applied, {stale} stale", file=sys.stderr)
     if args.top > 0:
         ranked = sorted(
             (b for b in buildings if args.include_tests or b["role"] == "source"),

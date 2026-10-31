@@ -14,6 +14,8 @@ from codeland_analyzer.native import DEFAULT_THRESHOLDS, SOURCE, NativeThreshold
 from codeland_analyzer.parse import FileMetrics, analyze_source
 from codeland_analyzer.resolve import is_relative, resolve
 from codeland_analyzer.sarif import read_sarif
+from codeland_analyzer.trend import apply_trend
+from codeland_analyzer.triage import apply_triage, read_triage
 
 ROOT_DISTRICT_ID = "."
 
@@ -30,8 +32,12 @@ def analyze(
     previous: dict[str, Any] | None = None,
     sarif: list[Path] | None = None,
     native: NativeThresholds | None = DEFAULT_THRESHOLDS,
+    triage: Path | None = None,
 ) -> dict[str, Any]:
-    """previous: an earlier city model of the same repository, whose layout is kept stable.
+    """previous: an earlier city model of the same repository, whose layout is kept stable and
+    whose findings give `firstSeen` and the trend.
+
+    triage: sidecar file with human decisions about findings (see triage.py).
 
     sarif: SARIF 2.1.0 reports to import as findings; native: thresholds of Codeland's own
     findings (None to skip them).
@@ -115,16 +121,22 @@ def analyze(
     ]
 
     findings, finding_sources = collect_findings(repo, buildings, sarif or [], native)
+    generated_at = datetime.now(UTC).isoformat(timespec="seconds")
+    trend = apply_trend(findings, previous, generated_at, {s["tool"] for s in finding_sources})
+    if triage is not None:
+        apply_triage(findings, read_triage(triage))
     commit, branch = head_info(repo)
     return {
         "schemaVersion": SCHEMA_VERSION,
-        "generatedAt": datetime.now(UTC).isoformat(timespec="seconds"),
+        "generatedAt": generated_at,
         "repository": {"name": repo.name, "commit": commit, "branch": branch},
         "analysis": {
             "language": "typescript",
             "churnWindowDays": churn_days,
             "coverageSource": coverage.as_posix() if coverage else None,
             "findingSources": finding_sources,
+            "triageSource": triage.as_posix() if triage else None,
+            "trend": trend,
         },
         "districts": districts,
         "buildings": buildings,

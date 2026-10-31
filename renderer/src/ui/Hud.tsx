@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { LiveStatus } from "../live/useLive";
 import {
   type AgentState,
@@ -15,9 +16,12 @@ import {
   facets,
   type FindingFilter,
   formatLocation,
+  isNew,
+  isSetAside,
   type RankedFinding,
   SEVERITIES,
   type Severity,
+  trendSummary,
 } from "../model/findings";
 import { type BuildingShape, type CityView, hotspotRanking, type Layer } from "../model/view";
 
@@ -133,7 +137,12 @@ export function Hud(props: Props) {
           onSelect={props.onSelectFinding}
         />
         {selectedFinding && (
-          <FindingDetails finding={selectedFinding} onClose={() => props.onSelectFinding(null)} />
+          <FindingDetails
+            finding={selectedFinding}
+            since={model.analysis.trend?.since ?? null}
+            triageFile={model.analysis.triageSource ?? "codeland-triage.json"}
+            onClose={() => props.onSelectFinding(null)}
+          />
         )}
         {selected && <Details building={selected} onClose={() => onSelect(null)} />}
         <AgentsPanel
@@ -224,7 +233,9 @@ function FindingsPanel(props: {
 }) {
   const { model, ranked, filter, onFilter } = props;
   const counts = facets(model, filter);
-  const suppressed = model.findings.filter((f) => f.status === "suppressed").length;
+  const suppressed = model.findings.filter(isSetAside).length;
+  const trend = trendSummary(model);
+  const since = trend?.since ?? null;
   const toggleCategory = (category: Category) => {
     const next = new Set(filter.categories);
     if (!next.delete(category)) next.add(category);
@@ -279,6 +290,33 @@ function FindingsPanel(props: {
           </button>
         ))}
       </div>
+      {trend && (
+        <div className="trend">
+          <button
+            className={`chip ${filter.onlyNew ? "active" : ""}`}
+            title="Mostrar só os problemas que apareceram desde a análise anterior"
+            onClick={() => onFilter({ ...filter, onlyNew: !filter.onlyNew })}
+          >
+            novos {trend.added}
+          </button>
+          <span className="muted">
+            desde {formatDate(trend.since)} · {trend.fixed.length} corrigidos
+          </span>
+          {trend.fixed.length > 0 && (
+            <details>
+              <summary>ver corrigidos</summary>
+              <ul className="fixed-list">
+                {trend.fixed.map((f) => (
+                  <li key={f.id}>
+                    <i className={`sev-dot sev-${f.severity}`} /> {f.title ?? f.ruleId}
+                    <span className="finding-where">{f.path}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      )}
       {suppressed > 0 && (
         <label className="toggle">
           <input
@@ -286,7 +324,7 @@ function FindingsPanel(props: {
             checked={filter.showSuppressed}
             onChange={(e) => onFilter({ ...filter, showSuppressed: e.target.checked })}
           />
-          Mostrar suprimidos ({suppressed})
+          Mostrar suprimidos e triados ({suppressed})
         </label>
       )}
       {ranked.length === 0 && <p className="muted">Nenhum problema com esses filtros.</p>}
@@ -299,7 +337,10 @@ function FindingsPanel(props: {
               title={formatLocation(finding)}
             >
               <i className={`sev-dot sev-${finding.severity}`} />
-              <span className="finding-title">{finding.title ?? finding.ruleId}</span>
+              <span className="finding-title">
+                {finding.title ?? finding.ruleId}
+                {isNew(finding, since) && <b className="badge-new">novo</b>}
+              </span>
               <span className="finding-score">{priority.toFixed(1)}</span>
               <span className="finding-where">
                 {formatLocation(finding)}
@@ -318,17 +359,38 @@ function FindingsPanel(props: {
   );
 }
 
-function FindingDetails({ finding, onClose }: { finding: Finding; onClose: () => void }) {
-  const { source } = finding;
+const TRIAGE_LABEL = { accepted: "aceito", "false-positive": "falso positivo" } as const;
+
+function formatDate(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? iso : date.toLocaleDateString("pt-BR");
+}
+
+function FindingDetails(props: {
+  finding: Finding;
+  since: string | null;
+  triageFile: string;
+  onClose: () => void;
+}) {
+  const { finding, source } = { finding: props.finding, source: props.finding.source };
+  const [copied, setCopied] = useState<string | null>(null);
+  const copy = (state: string) => {
+    const command = `codeland-triage ${props.triageFile} ${state} ${finding.id} --note ""`;
+    navigator.clipboard?.writeText(command).then(
+      () => setCopied(state),
+      () => setCopied(null),
+    );
+  };
   return (
     <section className="panel details">
-      <button className="close" onClick={onClose} aria-label="Fechar">
+      <button className="close" onClick={props.onClose} aria-label="Fechar">
         ×
       </button>
       <h2>
         <i className={`sev-dot sev-${finding.severity}`} /> {SEVERITY_LABEL[finding.severity]} ·{" "}
         {CATEGORY_LABEL[finding.category]}
         {finding.status === "suppressed" && " · suprimido"}
+        {finding.triage && ` · ${TRIAGE_LABEL[finding.triage.state]}`}
       </h2>
       <div className="details-path">{finding.title ?? finding.ruleId}</div>
       <p className="finding-message">{finding.message}</p>
@@ -348,7 +410,42 @@ function FindingDetails({ finding, onClose }: { finding: Finding; onClose: () =>
             {source.version && ` ${source.version}`}
           </dd>
         </div>
+        <div>
+          <dt>Visto desde</dt>
+          <dd>
+            {formatDate(finding.firstSeen)}
+            {isNew(finding, props.since) && " · novo"}
+          </dd>
+        </div>
+        {finding.triage && (
+          <div>
+            <dt>Decisão</dt>
+            <dd>
+              {TRIAGE_LABEL[finding.triage.state]}
+              {finding.triage.at && ` em ${formatDate(finding.triage.at)}`}
+              {finding.triage.note && `: ${finding.triage.note}`}
+            </dd>
+          </div>
+        )}
       </dl>
+      <div className="triage-actions">
+        {finding.triage ? (
+          <button className="chip" onClick={() => copy("reopen")}>
+            {copied === "reopen" ? "comando copiado" : "reabrir"}
+          </button>
+        ) : (
+          <>
+            <button className="chip" onClick={() => copy("accepted")}>
+              {copied === "accepted" ? "comando copiado" : "aceitar"}
+            </button>
+            <button className="chip" onClick={() => copy("false-positive")}>
+              {copied === "false-positive" ? "comando copiado" : "falso positivo"}
+            </button>
+          </>
+        )}
+        <span className="muted">copia o comando para o terminal</span>
+      </div>
+      <div className="muted finding-id">id {finding.id}</div>
     </section>
   );
 }

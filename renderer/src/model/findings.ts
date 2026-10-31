@@ -1,5 +1,5 @@
 // Pure findings logic: priority, filters, summaries (no three.js). See docs section 6.
-import type { Building, CodelandCityModel, Finding } from "./city-model";
+import type { Building, CodelandCityModel, Finding, Trend } from "./city-model";
 
 export type Severity = Finding["severity"];
 export type Category = Finding["category"];
@@ -38,7 +38,10 @@ export interface FindingFilter {
   categories: ReadonlySet<Category>;
   /** Findings at least this severe. */
   minSeverity: Severity;
+  /** Also show findings suppressed in the scanner or triaged (accepted / false positive). */
   showSuppressed: boolean;
+  /** Only findings first seen after the previous model (needs a trend). */
+  onlyNew: boolean;
   /** Case-insensitive match on path, rule, title and message. */
   query: string;
 }
@@ -47,6 +50,7 @@ export const DEFAULT_FILTER: FindingFilter = {
   categories: new Set(),
   minSeverity: "info",
   showSuppressed: false,
+  onlyNew: false,
   query: "",
 };
 
@@ -72,12 +76,24 @@ export function priorityOf(finding: Finding, building: Building | null, maxChurn
   return weight * importance * (1 + 0.5 * uncovered) * (building.role === "test" ? 0.5 : 1);
 }
 
+/** Set aside by the scanner or by a human decision. */
+export function isSetAside(finding: Finding): boolean {
+  return finding.status === "suppressed" || finding.triage !== undefined;
+}
+
+/** First seen after the previous model; false when there is no previous model. */
+export function isNew(finding: Finding, since: string | null): boolean {
+  return since !== null && finding.firstSeen > since;
+}
+
 export function matches(
   finding: Finding,
   filter: FindingFilter,
+  since: string | null,
   skip?: "category" | "severity",
 ): boolean {
-  if (finding.status === "suppressed" && !filter.showSuppressed) return false;
+  if (isSetAside(finding) && !filter.showSuppressed) return false;
+  if (filter.onlyNew && !isNew(finding, since)) return false;
   if (
     skip !== "severity" &&
     SEVERITIES.indexOf(finding.severity) > SEVERITIES.indexOf(filter.minSeverity)
@@ -102,8 +118,9 @@ export function matches(
 export function rankFindings(model: CodelandCityModel, filter: FindingFilter): RankedFinding[] {
   const byPath = new Map(model.buildings.map((b) => [b.path, b]));
   const maxChurn = model.buildings.reduce((max, b) => Math.max(max, b.metrics.churnCommits), 0);
+  const since = model.analysis.trend?.since ?? null;
   return model.findings
-    .filter((f) => matches(f, filter))
+    .filter((f) => matches(f, filter, since))
     .map((finding) => {
       const building = byPath.get(finding.location.path) ?? null;
       return { finding, building, priority: priorityOf(finding, building, maxChurn) };
@@ -128,9 +145,10 @@ export function facets(model: CodelandCityModel, filter: FindingFilter): Facets 
     categories: Object.fromEntries(CATEGORIES.map((c) => [c, 0])) as Facets["categories"],
     severities: Object.fromEntries(SEVERITIES.map((s) => [s, 0])) as Facets["severities"],
   };
+  const since = model.analysis.trend?.since ?? null;
   for (const finding of model.findings) {
-    if (matches(finding, filter, "category")) result.categories[finding.category] += 1;
-    if (matches(finding, filter, "severity")) result.severities[finding.severity] += 1;
+    if (matches(finding, filter, since, "category")) result.categories[finding.category] += 1;
+    if (matches(finding, filter, since, "severity")) result.severities[finding.severity] += 1;
   }
   return result;
 }
@@ -162,4 +180,19 @@ export function formatLocation(finding: Finding): string {
   return endLine !== null && endLine !== startLine
     ? `${path}:${startLine}-${endLine}`
     : `${path}:${startLine}`;
+}
+
+export interface TrendSummary {
+  since: string;
+  /** Open findings that appeared since the previous model. */
+  added: number;
+  fixed: Trend["fixed"];
+}
+
+/** What changed since the previous model, or null when the model has no trend. */
+export function trendSummary(model: CodelandCityModel): TrendSummary | null {
+  const trend = model.analysis.trend;
+  if (!trend) return null;
+  const added = model.findings.filter((f) => !isSetAside(f) && isNew(f, trend.since)).length;
+  return { since: trend.since, added, fixed: trend.fixed };
 }

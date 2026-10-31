@@ -13,6 +13,7 @@ dependencies = [
 [project.scripts]
 codeland-analyze = "codeland_analyzer.cli:main"
 codeland-live = "codeland_analyzer.live.cli:main"
+codeland-triage = "codeland_analyzer.triage_cli:main"
 
 [dependency-groups]
 dev = [

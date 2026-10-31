@@ -246,8 +246,11 @@ Codeland turns what it already measures into maintainability findings, with `sou
 | **A. Findings in the model** — *implemented* | Schema v0.3.0, SARIF importer, native findings, tests with real SARIF samples. |
 | **B. Problems layer and panel** — *implemented* | Renderer layer, filters, priority ordering, click-to-fly. |
 | **C. Real scanners on bella-nina** — *implemented* | ESLint 9 (typescript-eslint, SARIF formatter) and Semgrep 1.18x (Docker; the pip build does not run on Windows) ran on bella-nina and on a copy with planted problems. bella-nina itself is clean for both (0 findings), so the planted copy is what exercised the importer. Real output exposed three things the hand-written fixtures hid: containers and CI report absolute paths outside the repo (`/src/src/a.ts`; now matched by their longest tail that is a repo file), Semgrep OSS writes the fingerprint `requires login` on every result (ignored: values with spaces), and linters report must-fix style rules as `error` (a maintainability finding from `level` alone is capped at medium). Semgrep only scans git-tracked files. |
-| **D. Trend and triage** | Compare scans by `id` (new / fixed), sidecar triage file. |
+| **D. Trend and triage** — *implemented* | Schema v0.4.0. Trend: `--previous` now also carries `firstSeen` per finding and `analysis.trend {since, fixed[]}`; a finding is *new* when `firstSeen > since`; a previous finding is *fixed* only if its tool reported again in this run (omitting a report is not a fix). Triage: see 6.7. |
 | **E. Sweep agents** | Agents that write SARIF (security first, then others), delivered through the paused live channel if useful. |
+
+### 6.7 Triage
+Decisions live in a sidecar file, `codeland-triage.json` (`{version: 1, findings: {<id>: {state, note, at}}}`), kept next to the repository and committed with it, so the team shares them and they survive re-scans because ids are stable (6.3). States: `accepted` (known risk, left as is) and `false-positive`; "resolved" is not a state, it is what the trend reports when the finding disappears. `codeland-triage <file> accepted|false-positive|reopen <id>... [--note]` edits the file and `codeland-analyze --triage <file>` merges it into `finding.triage`; entries matching no finding are reported as stale and kept. The renderer is a static page that cannot write files, so the finding card shows the id and copies the command instead of editing. Triaged findings are hidden like scanner-suppressed ones (one toggle shows both) and no longer count as new.
 
 ---
 

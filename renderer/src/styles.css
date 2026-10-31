@@ -615,3 +615,12 @@ h2 {
   font-size: 12px;
   line-height: 1.4;
 }
+
+.trend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0; font-size: 12px; }
+.trend details { width: 100%; }
+.trend summary { cursor: pointer; color: var(--muted, #8aa); }
+.fixed-list { list-style: none; margin: 4px 0 0; padding: 0; max-height: 120px; overflow: auto; }
+.fixed-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 2px 0; opacity: 0.8; }
+.badge-new { margin-left: 6px; padding: 0 5px; border-radius: 6px; font-size: 10px; font-weight: 600; color: #04121a; background: #5fe3ff; }
+.triage-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+.finding-id { margin-top: 6px; font-size: 10px; word-break: break-all; }
