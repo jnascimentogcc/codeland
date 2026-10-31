@@ -10,8 +10,10 @@ from codeland_analyzer.churn import Churn, collect_churn
 from codeland_analyzer.coverage import read_lcov
 from codeland_analyzer.gitrepo import head_info, is_test, list_source_files
 from codeland_analyzer.layout import footprint_side, layout_city, slots_from_model
+from codeland_analyzer.native import DEFAULT_THRESHOLDS, SOURCE, NativeThresholds, native_findings
 from codeland_analyzer.parse import FileMetrics, analyze_source
 from codeland_analyzer.resolve import is_relative, resolve
+from codeland_analyzer.sarif import read_sarif
 
 ROOT_DISTRICT_ID = "."
 
@@ -26,8 +28,14 @@ def analyze(
     churn_days: int = 180,
     coverage: Path | None = None,
     previous: dict[str, Any] | None = None,
+    sarif: list[Path] | None = None,
+    native: NativeThresholds | None = DEFAULT_THRESHOLDS,
 ) -> dict[str, Any]:
-    """previous: an earlier city model of the same repository, whose layout is kept stable."""
+    """previous: an earlier city model of the same repository, whose layout is kept stable.
+
+    sarif: SARIF 2.1.0 reports to import as findings; native: thresholds of Codeland's own
+    findings (None to skip them).
+    """
     repo = repo.resolve()
     files = list_source_files(repo)
     known = set(files)
@@ -106,6 +114,7 @@ def analyze(
         for path, rect in sorted(district_rects.items())
     ]
 
+    findings, finding_sources = collect_findings(repo, buildings, sarif or [], native)
     commit, branch = head_info(repo)
     return {
         "schemaVersion": SCHEMA_VERSION,
@@ -115,8 +124,37 @@ def analyze(
             "language": "typescript",
             "churnWindowDays": churn_days,
             "coverageSource": coverage.as_posix() if coverage else None,
+            "findingSources": finding_sources,
         },
         "districts": districts,
         "buildings": buildings,
         "edges": sorted(edges, key=lambda e: (e["from"], e["to"], e["kind"])),
+        "findings": findings,
     }
+
+
+def collect_findings(
+    repo: Path,
+    buildings: list[dict[str, Any]],
+    reports: list[Path],
+    native: NativeThresholds | None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    findings: list[dict[str, Any]] = []
+    sources: list[dict[str, Any]] = []
+    for report in reports:
+        imported = read_sarif(report, repo)
+        findings.extend(imported.findings)
+        sources.extend(imported.sources)
+    if native is not None:
+        own = native_findings(buildings, native)
+        findings.extend(own)
+        sources.append({**SOURCE, "file": None, "findings": len(own), "dropped": 0})
+    findings.sort(
+        key=lambda f: (
+            f["location"]["path"],
+            f["location"]["startLine"] or 0,
+            f["ruleId"],
+            f["id"],
+        )
+    )
+    return findings, sources

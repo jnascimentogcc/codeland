@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://codeland.dev/schema/city-model/0.2.0",
+  "$id": "https://codeland.dev/schema/city-model/0.3.0",
   "title": "Codeland city model",
   "description": "Contract between analyzers and clients. Raw metrics plus a persisted layout; clients decide visual mappings (see docs/architecture_and_mvp.md, section 2.2).",
   "type": "object",
-  "required": ["schemaVersion", "generatedAt", "repository", "analysis", "districts", "buildings", "edges"],
+  "required": ["schemaVersion", "generatedAt", "repository", "analysis", "districts", "buildings", "edges", "findings"],
   "additionalProperties": false,
   "properties": {
-    "schemaVersion": { "const": "0.2.0" },
+    "schemaVersion": { "const": "0.3.0" },
     "generatedAt": { "type": "string", "format": "date-time" },
     "repository": {
       "type": "object",
@@ -21,12 +21,17 @@
     },
     "analysis": {
       "type": "object",
-      "required": ["language", "churnWindowDays", "coverageSource"],
+      "required": ["language", "churnWindowDays", "coverageSource", "findingSources"],
       "additionalProperties": false,
       "properties": {
         "language": { "const": "typescript" },
         "churnWindowDays": { "type": "integer", "minimum": 1 },
-        "coverageSource": { "type": ["string", "null"], "description": "Coverage report used, or null when coverage was not provided." }
+        "coverageSource": { "type": ["string", "null"], "description": "Coverage report used, or null when coverage was not provided." },
+        "findingSources": {
+          "description": "Where the findings came from: one entry per imported SARIF file plus one for Codeland's own native findings.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/findingSource" }
+        }
       }
     },
     "districts": {
@@ -43,6 +48,11 @@
       "description": "Imports between buildings of this repository. External packages are only counted in metrics.externalImports.",
       "type": "array",
       "items": { "$ref": "#/$defs/edge" }
+    },
+    "findings": {
+      "description": "Problems found in the code, from scanners (SARIF), native analysis or agents (docs/architecture_and_mvp.md, section 6). Ordered by path, then line.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/finding" }
     }
   },
   "$defs": {
@@ -108,6 +118,54 @@
         "from": { "type": "string" },
         "to": { "type": "string" },
         "kind": { "enum": ["import", "reexport", "dynamic-import", "require"] }
+      }
+    },
+    "findingSource": {
+      "type": "object",
+      "required": ["tool", "version", "kind", "file", "findings", "dropped"],
+      "additionalProperties": false,
+      "properties": {
+        "tool": { "type": "string" },
+        "version": { "type": ["string", "null"] },
+        "kind": { "$ref": "#/$defs/sourceKind" },
+        "file": { "type": ["string", "null"], "description": "Imported report, or null for native findings." },
+        "findings": { "type": "integer", "minimum": 0, "description": "Findings kept from this source." },
+        "dropped": { "type": "integer", "minimum": 0, "description": "Results ignored: no location, a location outside the repository, or an id already seen." }
+      }
+    },
+    "sourceKind": { "enum": ["scanner", "native", "agent"] },
+    "finding": {
+      "type": "object",
+      "required": ["id", "ruleId", "title", "category", "severity", "message", "location", "source", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "description": "Stable across scans (docs section 6.3): never derived from line numbers." },
+        "ruleId": { "type": "string" },
+        "title": { "type": ["string", "null"], "description": "Short human name of the rule." },
+        "category": { "enum": ["security", "reliability", "maintainability", "testing", "dependencies", "performance", "other"] },
+        "severity": { "enum": ["critical", "high", "medium", "low", "info"] },
+        "message": { "type": "string" },
+        "location": {
+          "type": "object",
+          "required": ["path", "startLine", "endLine"],
+          "additionalProperties": false,
+          "properties": {
+            "path": { "type": "string", "description": "Repository-relative file path with forward slashes; it may not be a building (e.g. package-lock.json)." },
+            "startLine": { "type": ["integer", "null"], "minimum": 1 },
+            "endLine": { "type": ["integer", "null"], "minimum": 1 }
+          }
+        },
+        "source": {
+          "type": "object",
+          "required": ["tool", "version", "kind"],
+          "additionalProperties": false,
+          "properties": {
+            "tool": { "type": "string" },
+            "version": { "type": ["string", "null"] },
+            "kind": { "$ref": "#/$defs/sourceKind" }
+          }
+        },
+        "status": { "enum": ["open", "suppressed"] }
       }
     }
   }

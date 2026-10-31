@@ -1,0 +1,61 @@
+{
+  "version": "2.1.0",
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "Semgrep OSS",
+          "semanticVersion": "1.99.0",
+          "rules": [
+            {
+              "id": "javascript.express.security.audit.xss.direct-response-write",
+              "name": "direct-response-write",
+              "shortDescription": { "text": "Detected user input flowing into a response body." },
+              "defaultConfiguration": { "level": "error" },
+              "properties": { "tags": ["CWE-79: Cross-site Scripting", "security"], "precision": "high" }
+            },
+            {
+              "id": "typescript.lang.best-practice.no-console",
+              "name": "no-console",
+              "shortDescription": { "text": "console.log left in code." },
+              "defaultConfiguration": { "level": "note" },
+              "properties": { "tags": ["best-practice", "maintainability"] }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "javascript.express.security.audit.xss.direct-response-write",
+          "level": "error",
+          "message": { "text": "Detected user input\n   flowing into a response body.  Escape it first." },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "src/main.ts", "uriBaseId": "%SRCROOT%" },
+                "region": { "startLine": 4, "endLine": 5, "snippet": { "text": "return twice(n);" } }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "typescript.lang.best-practice.no-console",
+          "level": "note",
+          "message": { "text": "Remove console.log before shipping." },
+          "locations": [
+            { "physicalLocation": { "artifactLocation": { "uri": "./src/util.ts" }, "region": { "startLine": 1 } } }
+          ]
+        },
+        {
+          "ruleId": "typescript.lang.best-practice.no-console",
+          "level": "note",
+          "message": { "text": "Outside of the repository." },
+          "locations": [
+            { "physicalLocation": { "artifactLocation": { "uri": "../elsewhere/other.ts" }, "region": { "startLine": 1 } } }
+          ]
+        }
+      ]
+    }
+  ]
+}

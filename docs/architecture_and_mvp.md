@@ -4,6 +4,17 @@ This document builds on the initial vision in [codeland_concept.md](codeland_con
 
 ---
 
+## 0. Direction change: findings dashboard — **Decided**
+
+Phases 1 and 2 (sections 4.1 and 4.2) showed that the real-time agent view is fun but has little day-to-day use. The project pivots to a **code problems dashboard**: a static, repeatable representation of what is wrong in a codebase and what to fix first. Section 6 holds the decisions; where it conflicts with sections 1, 2.1 and 4, section 6 wins.
+
+* **Primary use case:** *"What problems does this code have, where are they, and which should I fix first?"* Technical debt is one category of problem among others (security, reliability, tests, dependencies, ...), not the whole product.
+* **The city is the map, not the whole dashboard.** It answers *where* and *what first*; a 2D panel (counts, filters, ordered list) is where work happens.
+* **Findings come from scanners, not from Codeland.** The input format is **SARIF 2.1.0**, the standard output of Semgrep, CodeQL, ESLint, Trivy, Gitleaks and many others. Codeland adds its own native maintainability findings from what it already measures.
+* **Agents move to the future:** sweep agents (security, but not limited to it) will be one more *producer* of findings, writing SARIF. The live agent view (4.2) is kept in the repository but is not part of the new product surface for now.
+
+---
+
 ## 1. Positioning
 
 ### 1.1 Prior art
@@ -183,7 +194,60 @@ Claude Code session ──hooks (curl, 1 s timeout)──► codeland-live (aioh
 * **Renderer — agents layer:** buildings dim to neutral; a file an agent read or edited lights up (rings and core beam) in the agent's colour and fades out (reads ~10 s, edits ~30 s). In every layer, agents are glowing orbs that fly to the file/folder they work on (hovering over the city centre for commands, parked around the city when idle), and the core beam of a touched file flares in the agent's colour. A **conflict** is a file edited by two or more live agents within 120 s: a spinning red ring over the tower and an alert in the agents panel.
 * **Demo without agents:** `codeland-live simulate <repo> --city <city.json>` replays realistic fake hook payloads (two agents, ending in a conflict on the hottest file).
 
-Not yet covered from the phase 2 scope: test results (Bash commands are shown, but their outcome is not parsed), and a per-session "what changed" view.
+**Status after the pivot (section 0):** phase 2 stays as implemented and tested but is paused: it is not extended and is hidden by default in the new UI. It becomes useful again as the delivery channel for sweep agents.
+
+---
+
+## 6. Findings dashboard (pivot) — **Decided**
+
+```
+Scanners (Semgrep, CodeQL, ESLint, Trivy, ...)  ──SARIF──┐
+Sweep agents (future: security, ...)            ──SARIF──┼─► codeland-analyze ──► city model (+ findings) ──► renderer
+Native analysis (complexity, churn, coverage)   ─────────┘
+```
+
+### 6.1 Contract
+Findings live **inside the city model** (schema v0.3.0, a new top-level `findings` array plus `analysis.findingSources`), so the renderer still loads one file and the layout stays shared. Each finding links to a building by repo-relative `path`. The renderer depends on the model only, never on SARIF.
+
+| Field | Meaning |
+|---|---|
+| `id` | Stable fingerprint (see 6.3). |
+| `ruleId`, `title` | Rule that fired, short human name. |
+| `category` | `security`, `reliability`, `maintainability`, `testing`, `dependencies`, `performance`, `other` (open to extension). |
+| `severity` | `critical`, `high`, `medium`, `low`, `info`. |
+| `message` | Tool message, truncated. |
+| `location` | `path` plus optional `startLine`/`endLine`. Results with no location, or located outside the repository, are dropped and counted per source in `analysis.findingSources`; findings in repository files that are not buildings (e.g. `package-lock.json`) are kept and shown in the panel only. |
+| `source` | `{tool, version, kind}`; kind is `scanner`, `native` or `agent`. |
+| `status` | `open` or `suppressed` (from SARIF suppressions); triage states come later (6.4). |
+
+**Priority is computed in the renderer**, not stored: severity × how much the file matters (hotspot score and churn) × lack of coverage. Weights can then change without re-analysis, and the same finding ranks higher in a file that changes every week.
+
+### 6.2 SARIF import
+* `codeland-analyze <repo> --sarif a.sarif --sarif b.sarif` (repeatable). Only SARIF 2.1.0 is accepted; anything else fails with a clear message.
+* **Severity:** the rule's `security-severity` property (CVSS 0–10, the convention GitHub Code Scanning uses) when present (≥9 critical, ≥7 high, ≥4 medium, else low); otherwise the result's `level` (`error` → high, `warning` → medium, `note` → low, `none` → info).
+* **Category:** rule tags (`security`, `maintainability`, ...), then the rule id prefix of known tools, then `other`.
+* **Paths:** `artifactLocation.uri` is resolved against `uriBaseId`/`originalUriBaseIds`, `file://` URIs and absolute paths are made repo-relative; results outside the repository are dropped and counted.
+* Suppressed results (`suppressions`) are kept with `status: suppressed` and hidden by default.
+
+### 6.3 Identity across scans
+A finding needs the same `id` between scans or neither trends nor triage can work. Order of preference: the SARIF `partialFingerprints` / `fingerprints` when the tool provides them, else a hash of `(tool, ruleId, path, normalized snippet or message)`. **Line numbers are never part of the hash**, so a finding survives code moving up and down the file. Stable layout (2.3) gives the same property for the map.
+
+### 6.4 Native findings
+Codeland turns what it already measures into maintainability findings, with `source.kind = native` and rule ids under `codeland/`: very high decision count in one file, hotspot (complexity × churn), low coverage in a changing file, and later circular imports. Thresholds are CLI options (`--max-decisions`, `--min-coverage`, `--no-native`); the hotspot rule also needs at least 10 decision points, because the hotspot score is relative and the top file of a small repository is always 1.0. They are deliberately few: scanners are better at everything else.
+
+### 6.5 UI
+* **Layer "Problems":** tower colour follows the highest-priority open finding (category colour or severity ramp, switchable); count or beam intensity shows how many; the existing debt and structure layers stay.
+* **Side panel (2D):** counts by category and severity, filters, and a list ordered by priority; clicking an item flies to the tower and opens the finding. Triage (accept / ignore / resolved) is stored in a sidecar file keyed by finding `id`, designed in after the first working version.
+
+### 6.6 Revised plan
+
+| Step | Scope |
+|---|---|
+| **A. Findings in the model** — *implemented* | Schema v0.3.0, SARIF importer, native findings, tests with real SARIF samples. |
+| **B. Problems layer and panel** | Renderer layer, filters, priority ordering, click-to-fly. |
+| **C. Real scanners on bella-nina** | Run Semgrep/ESLint to produce SARIF and check the ranking against what the team expects. |
+| **D. Trend and triage** | Compare scans by `id` (new / fixed), sidecar triage file. |
+| **E. Sweep agents** | Agents that write SARIF (security first, then others), delivered through the paused live channel if useful. |
 
 ---
 

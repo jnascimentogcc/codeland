@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 
 from codeland_analyzer.build import analyze
+from codeland_analyzer.native import DEFAULT_THRESHOLDS, NativeThresholds
+from codeland_analyzer.sarif import SarifError
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -31,12 +33,47 @@ def main(argv: list[str] | None = None) -> int:
         help="earlier city model of the same repository; its layout is kept stable "
         "(may be the same file as --output)",
     )
+    parser.add_argument(
+        "--sarif",
+        type=Path,
+        action="append",
+        default=[],
+        help="SARIF 2.1.0 report to import as findings (repeatable)",
+    )
+    parser.add_argument(
+        "--no-native", action="store_true", help="skip Codeland's own maintainability findings"
+    )
+    defaults = DEFAULT_THRESHOLDS
+    parser.add_argument(
+        "--max-decisions",
+        type=int,
+        default=defaults.max_decisions,
+        help=f"decisions in one file that count as a finding (default: {defaults.max_decisions})",
+    )
+    parser.add_argument(
+        "--min-coverage",
+        type=float,
+        default=defaults.min_coverage,
+        help=f"coverage that flags a changing file (default: {defaults.min_coverage})",
+    )
     args = parser.parse_args(argv)
 
     previous = json.loads(args.previous.read_text(encoding="utf-8")) if args.previous else None
-    model = analyze(
-        args.repo, churn_days=args.churn_days, coverage=args.coverage, previous=previous
-    )
+    native = None
+    if not args.no_native:
+        native = NativeThresholds(max_decisions=args.max_decisions, min_coverage=args.min_coverage)
+    try:
+        model = analyze(
+            args.repo,
+            churn_days=args.churn_days,
+            coverage=args.coverage,
+            previous=previous,
+            sarif=args.sarif,
+            native=native,
+        )
+    except SarifError as error:
+        print(f"codeland-analyze: {error}", file=sys.stderr)
+        return 2
     text = json.dumps(model, indent=2, ensure_ascii=False)
     if args.output:
         args.output.write_text(text + "\n", encoding="utf-8")
@@ -48,6 +85,9 @@ def main(argv: list[str] | None = None) -> int:
         f"{len(buildings)} files, {len(model['districts'])} folders, {len(model['edges'])} imports",
         file=sys.stderr,
     )
+    for source in model["analysis"]["findingSources"]:
+        dropped = f", {source['dropped']} ignored" if source["dropped"] else ""
+        print(f"  findings: {source['tool']} {source['findings']}{dropped}", file=sys.stderr)
     if args.top > 0:
         ranked = sorted(
             (b for b in buildings if args.include_tests or b["role"] == "source"),

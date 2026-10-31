@@ -28,10 +28,10 @@ function building(path: string, loc: number, hotspot: number, role: Building["ro
 }
 
 const MODEL: CodelandCityModel = {
-  schemaVersion: "0.2.0",
+  schemaVersion: "0.3.0",
   generatedAt: "2026-10-30T00:00:00+00:00",
   repository: { name: "sample", commit: null, branch: "main" },
-  analysis: { language: "typescript", churnWindowDays: 180, coverageSource: null },
+  analysis: { language: "typescript", churnWindowDays: 180, coverageSource: null, findingSources: [] },
   districts: [
     { id: ".", path: "", parent: null, depth: 0, layout: { x: 0, z: 0, width: 20, depth: 10 } },
     { id: "src", path: "src", parent: ".", depth: 1, layout: { x: 1, z: 1, width: 8, depth: 8 } },
@@ -42,6 +42,7 @@ const MODEL: CodelandCityModel = {
     building("index.ts", 0, 0.2, "source"),
   ],
   edges: [],
+  findings: [],
 };
 
 describe("buildCityView", () => {
@@ -87,7 +88,7 @@ describe("hotspotRanking", () => {
 
 describe("parseModel", () => {
   it("rejects other schema versions", () => {
-    expect(() => parseModel({ schemaVersion: "0.1.0" })).toThrow(/0\.2\.0/);
+    expect(() => parseModel({ schemaVersion: "0.1.0" })).toThrow(/0\.3\.0/);
     expect(parseModel(MODEL)).toBe(MODEL);
   });
 });

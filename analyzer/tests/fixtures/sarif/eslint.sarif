@@ -1,0 +1,48 @@
+{
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "ESLint",
+          "informationUri": "https://eslint.org",
+          "version": "9.18.0",
+          "rules": [
+            { "id": "no-unused-vars", "shortDescription": { "text": "Disallow unused variables" } },
+            { "id": "security/detect-eval-with-expression", "shortDescription": { "text": "Detects eval(variable)" } }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "no-unused-vars",
+          "ruleIndex": 0,
+          "level": "warning",
+          "message": { "text": "'express' is defined but never used." },
+          "locations": [
+            { "physicalLocation": { "artifactLocation": { "uri": "src/main.ts" }, "region": { "startLine": 2, "startColumn": 8 } } }
+          ]
+        },
+        {
+          "ruleId": "no-unused-vars",
+          "ruleIndex": 0,
+          "level": "warning",
+          "message": { "text": "'express' is defined but never used." },
+          "locations": [
+            { "physicalLocation": { "artifactLocation": { "uri": "src/main.ts" }, "region": { "startLine": 2, "startColumn": 8 } } }
+          ]
+        },
+        {
+          "ruleId": "security/detect-eval-with-expression",
+          "ruleIndex": 1,
+          "level": "error",
+          "message": { "text": "eval with variable" },
+          "locations": [
+            { "physicalLocation": { "artifactLocation": { "uri": "package-lock.json" } } }
+          ]
+        },
+        { "ruleId": "no-unused-vars", "level": "warning", "message": { "text": "No location." } }
+      ]
+    }
+  ]
+}

@@ -1,10 +1,12 @@
 /* Generated from schema/city-model.schema.json by npm run gen:types. Do not edit. */
 
+export type SourceKind = "scanner" | "native" | "agent";
+
 /**
  * Contract between analyzers and clients. Raw metrics plus a persisted layout; clients decide visual mappings (see docs/architecture_and_mvp.md, section 2.2).
  */
 export interface CodelandCityModel {
-  schemaVersion: "0.2.0";
+  schemaVersion: "0.3.0";
   generatedAt: string;
   repository: {
     name: string;
@@ -21,6 +23,10 @@ export interface CodelandCityModel {
      * Coverage report used, or null when coverage was not provided.
      */
     coverageSource: string | null;
+    /**
+     * Where the findings came from: one entry per imported SARIF file plus one for Codeland's own native findings.
+     */
+    findingSources: FindingSource[];
   };
   /**
    * Folders (city blocks). The repository root is the district with path "".
@@ -34,6 +40,27 @@ export interface CodelandCityModel {
    * Imports between buildings of this repository. External packages are only counted in metrics.externalImports.
    */
   edges: Edge[];
+  /**
+   * Problems found in the code, from scanners (SARIF), native analysis or agents (docs/architecture_and_mvp.md, section 6). Ordered by path, then line.
+   */
+  findings: Finding[];
+}
+export interface FindingSource {
+  tool: string;
+  version: string | null;
+  kind: SourceKind;
+  /**
+   * Imported report, or null for native findings.
+   */
+  file: string | null;
+  /**
+   * Findings kept from this source.
+   */
+  findings: number;
+  /**
+   * Results ignored: no location, a location outside the repository, or an id already seen.
+   */
+  dropped: number;
 }
 export interface District {
   id: string;
@@ -108,4 +135,32 @@ export interface Edge {
   from: string;
   to: string;
   kind: "import" | "reexport" | "dynamic-import" | "require";
+}
+export interface Finding {
+  /**
+   * Stable across scans (docs section 6.3): never derived from line numbers.
+   */
+  id: string;
+  ruleId: string;
+  /**
+   * Short human name of the rule.
+   */
+  title: string | null;
+  category: "security" | "reliability" | "maintainability" | "testing" | "dependencies" | "performance" | "other";
+  severity: "critical" | "high" | "medium" | "low" | "info";
+  message: string;
+  location: {
+    /**
+     * Repository-relative file path with forward slashes; it may not be a building (e.g. package-lock.json).
+     */
+    path: string;
+    startLine: number | null;
+    endLine: number | null;
+  };
+  source: {
+    tool: string;
+    version: string | null;
+    kind: SourceKind;
+  };
+  status: "open" | "suppressed";
 }

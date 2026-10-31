@@ -1,0 +1,59 @@
+{
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "CodeQL",
+          "semanticVersion": "2.20.1",
+          "rules": [
+            {
+              "id": "js/sql-injection",
+              "shortDescription": { "text": "Database query built from user-controlled sources" },
+              "properties": { "tags": ["security", "external/cwe/cwe-089"], "security-severity": "8.8" }
+            },
+            {
+              "id": "js/useless-assignment-to-local",
+              "shortDescription": { "text": "Useless assignment to local variable" },
+              "properties": { "tags": ["maintainability"] }
+            }
+          ]
+        }
+      },
+      "originalUriBaseIds": { "%SRCROOT%": { "uri": "REPO_URI" } },
+      "results": [
+        {
+          "ruleId": "js/sql-injection",
+          "ruleIndex": 0,
+          "level": "error",
+          "message": { "text": "This query depends on a user-provided value." },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "src/util.ts", "uriBaseId": "%SRCROOT%" },
+                "region": { "startLine": 1, "endLine": 1 }
+              }
+            }
+          ],
+          "partialFingerprints": { "primaryLocationLineHash": "5d2f1c0a8b7e:1" }
+        },
+        {
+          "ruleId": "js/useless-assignment-to-local",
+          "ruleIndex": 1,
+          "level": "warning",
+          "message": { "text": "The initial value of 'x' is unused." },
+          "suppressions": [{ "kind": "inSource", "status": "accepted" }],
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "src/main.ts", "uriBaseId": "%SRCROOT%" },
+                "region": { "startLine": 7 }
+              }
+            }
+          ],
+          "partialFingerprints": { "primaryLocationLineHash": "aa11bb22cc33:1" }
+        }
+      ]
+    }
+  ]
+}
