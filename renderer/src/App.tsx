@@ -85,10 +85,21 @@ export function App() {
             height: settings.height,
             heightScale: settings.heightScale,
             heightFactor: settings.heightFactor,
+            minHeight: settings.minHeight,
+            towerWidth: settings.towerWidth,
             problemCounts,
           })
         : null,
-    [model, showTests, settings.height, settings.heightScale, settings.heightFactor, problemCounts],
+    [
+      model,
+      showTests,
+      settings.height,
+      settings.heightScale,
+      settings.heightFactor,
+      settings.minHeight,
+      settings.towerWidth,
+      problemCounts,
+    ],
   );
 
   const changeSettings = (next: Settings) => {

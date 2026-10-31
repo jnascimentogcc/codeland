@@ -59,6 +59,10 @@ export interface ViewOptions {
   heightScale?: HeightScale;
   /** Multiplies the tallest tower (default 1). */
   heightFactor?: number;
+  /** Height of a tower whose metric is zero (default MIN_HEIGHT). */
+  minHeight?: number;
+  /** Share of the footprint a tower fills (default 1). */
+  towerWidth?: number;
   /** Findings per building id, for the "problems" height; buildings without an entry have 0. */
   problemCounts?: ReadonlyMap<string, number>;
 }
@@ -88,6 +92,8 @@ export function buildCityView(
     height = "loc",
     heightScale = "linear",
     heightFactor = 1,
+    minHeight = MIN_HEIGHT,
+    towerWidth = 1,
     problemCounts,
   }: ViewOptions = {},
 ): CityView {
@@ -133,8 +139,8 @@ export function buildCityView(
         x: layout.x + layout.width / 2 - centerX,
         z: layout.z + layout.depth / 2 - centerZ,
         base: (elevationById.get(building.district) ?? 0) + PLATE_THICKNESS,
-        radius: Math.min(layout.width, layout.depth) / 2,
-        height: MIN_HEIGHT + share(building) * maxHeight,
+        radius: (Math.min(layout.width, layout.depth) / 2) * towerWidth,
+        height: minHeight + share(building) * maxHeight,
         moduleHue: hueByModule.get(topModule(building.path)) ?? 0,
       };
     });

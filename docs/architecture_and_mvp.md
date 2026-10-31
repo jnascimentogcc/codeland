@@ -242,8 +242,11 @@ Codeland turns what it already measures into maintainability findings, with `sou
 ### 6.5.1 View settings
 The "ajustes" button of the header opens a panel with what changes how the city looks or how problems are ranked. Everything applies instantly, is **client-only** (never part of the city model, so no re-analysis and no schema change) and is kept in the browser's `localStorage` (`codeland.settings.v1`; corrupt, missing or blocked storage falls back to the defaults and the page still works). `model/settings.ts` holds the pure part (types, defaults, `parseSettings` clamping every number into its range, load/save).
 * **Tower height:** the metric (lines of code, decisions, commits, number of problems), the scale (linear or square root, which flattens the very tall towers and lifts the small ones) and an exaggeration factor. Normalized over all buildings, so hiding tests still does not rescale the city. The "problems" metric follows the active filters.
-* **Priority weights** (`findings.priorityOf`): hotspot, churn, lack of coverage, test-file factor and the multi-tool bonus. The defaults reproduce the formula of 6.5 exactly. Plus how many findings the list shows (10, 20, 40, 100).
-* **Scene:** import arcs (all and faint, only the selection's, hidden), glow (bloom) intensity, idle orbit and the grid.
+  Also the minimum height (how visible an empty lot stays) and the tower width (share of the lot it fills).
+* **Priority weights** (`findings.priorityOf`): the base weight of each severity, hotspot, churn, lack of coverage, test-file factor and the multi-tool bonus. The defaults reproduce the formula of 6.5 exactly. Plus how many findings the list shows (10, 20, 40, 100).
+* **Scene:** import arcs (all and faint, only the selection's, hidden) and their opacity, glow (bloom) intensity, idle orbit and its speed, grid, fog and district plates.
+* **Presets:** Padrão, Dívida técnica, Segurança, Apresentação and Foco are patches over the defaults (`PRESETS`); the one whose resulting settings equal the current ones is highlighted, otherwise the panel says "personalizado". Any manual change leaves the preset.
+* **Layout:** the panel sits in its own left column under the header, with collapsible sections and its own scroll, capped so it never covers the legend at the bottom-left.
 
 ### 6.6 Revised plan
 

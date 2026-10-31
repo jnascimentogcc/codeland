@@ -17,13 +17,8 @@ export const CATEGORIES: Category[] = [
   "other",
 ];
 
-export const SEVERITY_WEIGHT: Record<Severity, number> = {
-  critical: 10,
-  high: 6,
-  medium: 3,
-  low: 1.5,
-  info: 0.5,
-};
+/** Default base weight of each severity (the settings can change it). */
+export const SEVERITY_WEIGHT: Record<Severity, number> = DEFAULT_WEIGHTS.severity;
 
 /** Colour-ramp position of a severity in the problems layer (same ramp as the debt heat). */
 export const SEVERITY_HEAT: Record<Severity, number> = {
@@ -75,7 +70,7 @@ export function priorityOf(
   maxChurn: number,
   weights: PriorityWeights = DEFAULT_WEIGHTS,
 ): number {
-  const weight = SEVERITY_WEIGHT[finding.severity];
+  const weight = weights.severity[finding.severity];
   if (!building) return weight;
   const m = building.metrics;
   const churn = maxChurn > 0 ? m.churnCommits / maxChurn : 0;

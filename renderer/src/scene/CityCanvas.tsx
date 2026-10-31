@@ -43,7 +43,7 @@ export function CityCanvas(props: Props) {
       onPointerMissed={() => onSelect(null)}
     >
       <color attach="background" args={[BACKGROUND]} />
-      <fog attach="fog" args={[BACKGROUND, size * 1.2, size * 4]} />
+      {settings.fog && <fog attach="fog" args={[BACKGROUND, size * 1.2, size * 4]} />}
       {settings.grid && (
       <Grid
         infiniteGrid
@@ -58,7 +58,7 @@ export function CityCanvas(props: Props) {
         fadeStrength={1.5}
       />
       )}
-      <Districts view={view} />
+      {settings.districts && <Districts view={view} />}
       <Buildings
         view={view}
         layer={layer}
@@ -68,10 +68,16 @@ export function CityCanvas(props: Props) {
         selectedIndex={selectedIndex}
         onSelect={(i) => onSelect(view.buildings[i]?.building.id ?? null)}
       />
-      <ImportArcs view={view} edges={edges} selectedId={selectedId} mode={settings.arcs} />
+      <ImportArcs
+        view={view}
+        edges={edges}
+        selectedId={selectedId}
+        mode={settings.arcs}
+        opacity={settings.arcOpacity}
+      />
       <AgentOrbs view={view} agents={visibleAgents(live)} />
       <ConflictMarkers view={view} conflicts={conflicts} />
-      <CameraRig size={size} focus={focus} orbit={settings.idleOrbit} />
+      <CameraRig size={size} focus={focus} orbit={settings.idleOrbit ? settings.orbitSpeed : 0} />
       <EffectComposer multisampling={4}>
         <Bloom mipmapBlur intensity={settings.glow} luminanceThreshold={0.3} luminanceSmoothing={0.25} />
         <Noise opacity={0.025} />
@@ -82,7 +88,8 @@ export function CityCanvas(props: Props) {
 }
 
 /** Slow orbit while idle; flies to the selected tower. */
-function CameraRig(props: { size: number; focus: BuildingView | null; orbit: boolean }) {
+/** orbit: radians per second of the idle rotation (0 = still). */
+function CameraRig(props: { size: number; focus: BuildingView | null; orbit: number }) {
   const { size, focus, orbit } = props;
   const ref = useRef<ComponentRef<typeof CameraControls>>(null);
   const idle = useRef(true);
@@ -114,7 +121,7 @@ function CameraRig(props: { size: number; focus: BuildingView | null; orbit: boo
   }, [focus]);
 
   useFrame((_, delta) => {
-    if (idle.current && orbit) ref.current?.rotate(delta * 0.05, 0, false);
+    if (idle.current && orbit > 0) ref.current?.rotate(delta * orbit, 0, false);
   });
 
   return (

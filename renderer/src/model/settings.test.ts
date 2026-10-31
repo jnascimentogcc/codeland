@@ -3,7 +3,10 @@ import {
   DEFAULT_SETTINGS,
   isDefault,
   loadSettings,
+  matchingPreset,
   parseSettings,
+  PRESETS,
+  presetSettings,
   RANGES,
   saveSettings,
 } from "./settings";
@@ -49,6 +52,60 @@ describe("parseSettings", () => {
     expect(settings.arcs).toBe("off");
     expect(settings.idleOrbit).toBe(false);
     expect(settings.listLimit).toBe(100);
+  });
+});
+
+describe("severity weights and the extra parameters", () => {
+  it("validates each severity weight and the scene parameters on their own", () => {
+    const settings = parseSettings({
+      weights: { severity: { critical: 99, high: -3, medium: "x", low: 2 } },
+      minHeight: 1.5,
+      towerWidth: 0.1,
+      orbitSpeed: 9,
+      arcOpacity: 0.3,
+      fog: false,
+      districts: false,
+    });
+    expect(settings.weights.severity).toEqual({
+      critical: RANGES.severity.max,
+      high: RANGES.severity.min,
+      medium: DEFAULT_SETTINGS.weights.severity.medium,
+      low: 2,
+      info: DEFAULT_SETTINGS.weights.severity.info,
+    });
+    expect(settings.minHeight).toBe(1.5);
+    expect(settings.towerWidth).toBe(RANGES.towerWidth.min);
+    expect(settings.orbitSpeed).toBe(RANGES.orbitSpeed.max);
+    expect(settings.arcOpacity).toBe(0.3);
+    expect([settings.fog, settings.districts]).toEqual([false, false]);
+  });
+});
+
+describe("presets", () => {
+  it("are complete valid settings, the first one being the defaults", () => {
+    expect(presetSettings(PRESETS[0]!)).toEqual(DEFAULT_SETTINGS);
+    for (const preset of PRESETS) {
+      expect(parseSettings(presetSettings(preset))).toEqual(presetSettings(preset));
+    }
+    const ids = PRESETS.map((p) => p.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("change what they promise and keep the rest at the defaults", () => {
+    const security = presetSettings(PRESETS.find((p) => p.id === "security")!);
+    expect(security.height).toBe("problems");
+    expect(security.weights.severity.critical).toBe(15);
+    expect(security.weights.hotspot).toBe(0.5);
+    expect(security.glow).toBe(DEFAULT_SETTINGS.glow);
+    const focus = presetSettings(PRESETS.find((p) => p.id === "focus")!);
+    expect([focus.idleOrbit, focus.grid, focus.fog]).toEqual([false, false, false]);
+  });
+
+  it("are recognised only while the settings still equal them", () => {
+    const debt = PRESETS.find((p) => p.id === "debt")!;
+    expect(matchingPreset(presetSettings(debt))?.id).toBe("debt");
+    expect(matchingPreset(DEFAULT_SETTINGS)?.id).toBe("default");
+    expect(matchingPreset({ ...presetSettings(debt), glow: 0.1 })).toBeUndefined();
   });
 });
 

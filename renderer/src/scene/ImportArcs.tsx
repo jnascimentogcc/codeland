@@ -27,11 +27,13 @@ export function ImportArcs({
   edges,
   selectedId,
   mode = "auto",
+  opacity = 0.16,
 }: {
   view: CityView;
   edges: Edge[];
   selectedId: string | null;
   mode?: ArcMode;
+  opacity?: number;
 }) {
   const arcs = useMemo(() => {
     const result: Arc[] = [];
@@ -63,13 +65,20 @@ export function ImportArcs({
           arc={arc}
           color={!selectedId ? IDLE : arc.edge.from === selectedId ? OUTGOING : INCOMING}
           active={selectedId !== null}
+          idleOpacity={opacity}
         />
       ))}
     </group>
   );
 }
 
-function ArcLine({ arc, color, active }: { arc: Arc; color: THREE.Color; active: boolean }) {
+function ArcLine(props: {
+  arc: Arc;
+  color: THREE.Color;
+  active: boolean;
+  idleOpacity: number;
+}) {
+  const { arc, color, active, idleOpacity } = props;
   const ref = useRef<ComponentRef<typeof QuadraticBezierLine>>(null);
   useFrame((_, delta) => {
     if (active && ref.current) ref.current.material.dashOffset -= delta * 1.5;
@@ -86,7 +95,7 @@ function ArcLine({ arc, color, active }: { arc: Arc; color: THREE.Color; active:
       dashSize={0.5}
       gapSize={0.35}
       transparent
-      opacity={active ? 0.95 : 0.16}
+      opacity={active ? 0.95 : idleOpacity}
       toneMapped={false}
     />
   );

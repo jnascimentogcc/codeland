@@ -88,56 +88,64 @@ export function Hud(props: Props) {
 
   return (
     <div className="hud">
-      <header className="panel brand">
-        <div className="logo">CODELAND</div>
-        <div className="repo">{repository.name}</div>
-        <div className="muted">
-          {repository.branch ?? "detached"}
-          {repository.commit && ` @ ${repository.commit.slice(0, 7)}`}
-        </div>
-        <div className="muted">
-          {model.buildings.length} arquivos · {model.edges.length} imports ·{" "}
-          {model.analysis.churnWindowDays} dias de histórico
-        </div>
-        <div className="controls">
-          <Segmented
-            label="Camada"
-            value={layer}
-            onChange={onLayer}
-            options={[
-              ["problems", "Problemas"],
-              ["debt", "Dívida"],
-              ["structure", "Estrutura"],
-              ...(props.liveStatus === "off" ? [] : [["agents", "Agentes"] as [Layer, string]]),
-            ]}
-          />
-          <Segmented
-            label="Forma"
-            value={shape}
-            onChange={onShape}
-            options={[
-              ["rings", "Anéis"],
-              ["prism", "Prisma"],
-            ]}
-          />
-          <label className="toggle">
-            <input
-              type="checkbox"
-              checked={showTests}
-              onChange={(e) => onShowTests(e.target.checked)}
+      <div className="left">
+        <header className="panel brand">
+          <div className="logo">CODELAND</div>
+          <div className="repo">{repository.name}</div>
+          <div className="muted">
+            {repository.branch ?? "detached"}
+            {repository.commit && ` @ ${repository.commit.slice(0, 7)}`}
+          </div>
+          <div className="muted">
+            {model.buildings.length} arquivos · {model.edges.length} imports ·{" "}
+            {model.analysis.churnWindowDays} dias de histórico
+          </div>
+          <div className="controls">
+            <Segmented
+              label="Camada"
+              value={layer}
+              onChange={onLayer}
+              options={[
+                ["problems", "Problemas"],
+                ["debt", "Dívida"],
+                ["structure", "Estrutura"],
+                ...(props.liveStatus === "off" ? [] : [["agents", "Agentes"] as [Layer, string]]),
+              ]}
             />
-            Testes
-          </label>
-          <button
-            className={`chip ${showSettings ? "active" : ""}`}
-            aria-expanded={showSettings}
-            onClick={() => setShowSettings(!showSettings)}
-          >
-            ajustes
-          </button>
-        </div>
-        {showSettings && <SettingsPanel settings={props.settings} onChange={props.onSettings} />}
-      </header>
+            <Segmented
+              label="Forma"
+              value={shape}
+              onChange={onShape}
+              options={[
+                ["rings", "Anéis"],
+                ["prism", "Prisma"],
+              ]}
+            />
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={showTests}
+                onChange={(e) => onShowTests(e.target.checked)}
+              />
+              Testes
+            </label>
+            <button
+              className={`chip ${showSettings ? "active" : ""}`}
+              aria-expanded={showSettings}
+              onClick={() => setShowSettings(!showSettings)}
+            >
+              ajustes
+            </button>
+          </div>
+        </header>
+        {showSettings && (
+          <SettingsPanel
+            settings={props.settings}
+            onChange={props.onSettings}
+            onClose={() => setShowSettings(false)}
+          />
+        )}
+      </div>
 
       <aside className="side">
         <FindingsPanel

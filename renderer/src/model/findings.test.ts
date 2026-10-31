@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Building, CodelandCityModel, Finding } from "./city-model";
+import { DEFAULT_WEIGHTS } from "./settings";
 import {
   DEFAULT_FILTER,
   facets,
@@ -76,13 +77,15 @@ describe("priority", () => {
   it("follows the configured weights", () => {
     const [, hot] = MODEL.buildings as [Building, Building];
     const same = finding("x", "any.ts", "medium");
-    const flat = { hotspot: 0, churn: 0, uncovered: 0, testFiles: 1, corroboration: 0 };
+    const flat = { ...DEFAULT_WEIGHTS, hotspot: 0, churn: 0, uncovered: 0, testFiles: 1 };
     expect(priorityOf(same, hot, 10, flat)).toBe(3); // the file no longer matters
     const heavy = { ...flat, hotspot: 4 };
     expect(priorityOf(same, hot, 10, heavy)).toBe(3 * (1 + 4 * hot.metrics.hotspot));
     const halved = { ...flat, testFiles: 0.5 };
     const test = { ...hot, role: "test" as const };
     expect(priorityOf(same, test, 10, halved)).toBe(1.5);
+    const severe = { ...flat, severity: { ...flat.severity, medium: 9 } };
+    expect(priorityOf(same, hot, 10, severe)).toBe(9); // the severity table is configurable
   });
 
   it("ranks by priority, so a medium in a hotspot can beat a high in calm code", () => {
